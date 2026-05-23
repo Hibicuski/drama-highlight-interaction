@@ -1,0 +1,55 @@
+{
+  "dramaId": "demo-drama-001",
+  "episodeId": "episode-001",
+  "version": "0.1.0",
+  "highlights": [
+    {
+      "id": "hl-001",
+      "startMs": 12000,
+      "endMs": 18000,
+      "type": "revenge",
+      "intensity": 0.92,
+      "template": "dual-button",
+      "payload": {
+        "title": "爽点来袭",
+        "actions": [
+          { "key": "satisfying", "label": "爽了" },
+          { "key": "more", "label": "继续狠狠干" }
+        ],
+        "effect": "particle-burst"
+      }
+    },
+    {
+      "id": "hl-002",
+      "startMs": 45000,
+      "endMs": 52000,
+      "type": "twist",
+      "intensity": 0.85,
+      "template": "poll",
+      "payload": {
+        "title": "你猜到反转了吗",
+        "actions": [
+          { "key": "guessed", "label": "我猜到了" },
+          { "key": "surprised", "label": "居然反转" }
+        ],
+        "effect": "ratio-reveal"
+      }
+    },
+    {
+      "id": "hl-003",
+      "startMs": 78000,
+      "endMs": 90000,
+      "type": "ending-extension",
+      "intensity": 0.75,
+      "template": "branch-card",
+      "payload": {
+        "title": "想看哪种后续",
+        "actions": [
+          { "key": "sweet", "label": "甜蜜番外" },
+          { "key": "revenge", "label": "复仇升级" }
+        ],
+        "effect": "ending-card"
+      }
+    }
+  ]
+}

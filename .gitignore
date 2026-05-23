@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+coverage/
+
+# Runtime and local config
+.env
+.env.*
+!.env.example
+*.log
+logs/
+tmp/
+temp/
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Media and generated demo artifacts
+assets/raw/
+recordings/
+*.mp4
+*.mov
+*.avi
+*.mkv
