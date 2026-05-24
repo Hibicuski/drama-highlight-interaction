@@ -33,7 +33,6 @@ Thumbs.db
 assets/raw/
 recordings/
 *.mp4
-!client/android/app/src/main/res/raw/sample.mp4
 *.mov
 *.avi
 *.mkv

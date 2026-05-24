@@ -1,17 +1,15 @@
 package com.warren.shortdrama.core.player;
 
-import android.content.ContentResolver;
 import android.content.Context;
-import android.net.Uri;
 
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.ui.PlayerView;
 
-import com.warren.shortdrama.R;
-
 public class DramaPlayer {
+
+    private static final String FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
     private ExoPlayer player;
     private OnProgressUpdateListener progressListener;
@@ -28,12 +26,7 @@ public class DramaPlayer {
         player = new ExoPlayer.Builder(context).build();
         playerView.setPlayer(player);
 
-        String uri = videoUrl == null || videoUrl.isEmpty()
-                ? new Uri.Builder()
-                    .scheme(ContentResolver.SCHEME_ANDROID_RESOURCE)
-                    .path(String.valueOf(R.raw.sample))
-                    .build().toString()
-                : videoUrl;
+        String uri = videoUrl == null || videoUrl.isEmpty() ? FALLBACK_VIDEO_URL : videoUrl;
         MediaItem mediaItem = MediaItem.fromUri(uri);
         player.setMediaItem(mediaItem);
         player.prepare();

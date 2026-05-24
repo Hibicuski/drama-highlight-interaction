@@ -11,7 +11,7 @@ The app is a migrated and cleaned-up version of `oldDemo`:
 - drama list screen with `RecyclerView`
 - backend API calls through Retrofit
 - episode playback through Media3 ExoPlayer
-- local fallback data and `res/raw/sample.mp4`
+- remote fallback video when an episode has no video URL
 - simple timed highlight interaction after 10 seconds of playback
 
 Run the backend from the repository root with:
