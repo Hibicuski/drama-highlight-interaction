@@ -1,5 +1,24 @@
 # Client
 
-客户端目录，用于实现短剧列表、播放器、时间轴监听、高光互动浮层和互动结果展示。
+## Android
 
-当前推荐先完成 Web Demo，若后续选择 Android，可将播放器逻辑迁移到 `feat/android-player` 分支继续开发。
+Android Studio project location:
+
+```text
+client/android
+```
+
+Current demo flow:
+
+1. `DramaListActivity` loads `GET /api/dramas`.
+2. Tap a drama to load `GET /api/dramas/{id}/episodes`.
+3. `EpisodePlayerActivity` plays the first episode with Media3 ExoPlayer.
+4. If the backend is not running, the app falls back to local demo data and `res/raw/sample.mp4`.
+
+For Android Emulator, the API base URL is:
+
+```text
+http://10.0.2.2:3000/api/
+```
+
+If testing on a real phone, change `RetrofitClient.BASE_URL` to your computer's LAN IP.
