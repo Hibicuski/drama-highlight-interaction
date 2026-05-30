@@ -17,6 +17,8 @@ from app.db.models import (
 )
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi"}
+POSTER_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+PREFERRED_POSTER_NAMES = {"poster", "cover", "封面"}
 LOGGER = logging.getLogger(__name__)
 
 
@@ -42,11 +44,17 @@ def scan_local_dramas(local_drama_root: Path, public_base_url: str) -> tuple[lis
             continue
 
         drama_id = 1000 + drama_index
+        poster_file = find_poster_file(drama_dir)
+        poster_url = ""
+        if poster_file is not None:
+            poster_path = quote(poster_file.relative_to(local_drama_root).as_posix(), safe="/")
+            poster_url = f"{public_base_url}/posters/{poster_path}"
+
         dramas.append(
             Drama(
                 id=drama_id,
                 title=drama_dir.name,
-                poster="",
+                poster=poster_url,
                 tags=["local", "demo"],
                 description=f"本地短剧，共 {len(video_files)} 集。",
             )
@@ -70,6 +78,14 @@ def scan_local_dramas(local_drama_root: Path, public_base_url: str) -> tuple[lis
             manifests[episode_id] = default_manifest(episode_id)
 
     return dramas, episodes, manifests
+
+
+def find_poster_file(drama_dir: Path) -> Path | None:
+    poster_files = sorted(
+        [entry for entry in drama_dir.iterdir() if entry.is_file() and entry.suffix.lower() in POSTER_EXTENSIONS],
+        key=lambda item: (item.stem.lower() not in PREFERRED_POSTER_NAMES, item.name),
+    )
+    return poster_files[0] if poster_files else None
 
 
 def episode_index_from_name(file_name: str) -> int:

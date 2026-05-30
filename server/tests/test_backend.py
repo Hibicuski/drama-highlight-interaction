@@ -13,7 +13,8 @@ os.environ["LOCAL_DRAMA_ROOT"] = str(EMPTY_ROOT)
 
 from app.db.models import InteractionRequest
 from app.db.session import InMemoryStore
-from app.main import parse_range_header, safe_video_path
+from app.main import parse_range_header, safe_media_path, safe_video_path
+from app.services.media_scanner import POSTER_EXTENSIONS
 from app.services.media_scanner import scan_local_dramas
 
 
@@ -50,6 +51,19 @@ class VideoPathTests(unittest.TestCase):
                 safe_video_path(root, "../outside.mp4")
             self.assertEqual(403, context.exception.status_code)
 
+    def test_serves_only_supported_poster_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            poster_path = root / "poster.jpg"
+            poster_path.write_bytes(b"poster")
+            (root / "notes.txt").write_text("private", encoding="utf-8")
+
+            self.assertEqual(poster_path, safe_media_path(root, "poster.jpg", POSTER_EXTENSIONS))
+
+            with self.assertRaises(HTTPException) as context:
+                safe_media_path(root, "notes.txt", POSTER_EXTENSIONS)
+            self.assertEqual(404, context.exception.status_code)
+
 
 class MediaScannerTests(unittest.TestCase):
     def test_scans_real_folder_and_maps_ffprobe_duration(self) -> None:
@@ -58,11 +72,14 @@ class MediaScannerTests(unittest.TestCase):
             drama_dir = root / "测试短剧"
             drama_dir.mkdir()
             (drama_dir / "第2集.mp4").write_bytes(b"video")
+            (drama_dir / "poster.jpg").write_bytes(b"poster")
 
             with patch("app.services.media_scanner.subprocess.check_output", return_value="12.345\n"):
                 dramas, episodes, manifests = scan_local_dramas(root, "http://10.0.2.2:3000")
 
             self.assertEqual(["测试短剧"], [drama.title for drama in dramas])
+            self.assertIn("/posters/", dramas[0].poster)
+            self.assertIn("%E6%B5%8B%E8%AF%95%E7%9F%AD%E5%89%A7", dramas[0].poster)
             self.assertEqual(12345, episodes[0].duration_ms)
             self.assertIn("%E6%B5%8B%E8%AF%95%E7%9F%AD%E5%89%A7", episodes[0].video_url)
             self.assertIn(episodes[0].id, manifests)

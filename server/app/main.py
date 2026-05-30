@@ -5,11 +5,11 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.api import ai, dramas, interactions, manifests
 from app.db.session import get_store
-from app.services.media_scanner import VIDEO_EXTENSIONS
+from app.services.media_scanner import POSTER_EXTENSIONS, VIDEO_EXTENSIONS
 
 app = FastAPI(title="Drama Highlight Interaction API")
 
@@ -65,19 +65,30 @@ def get_video(relative_path: str, request: Request) -> StreamingResponse:
     )
 
 
-def safe_video_path(local_drama_root: Path, relative_path: str) -> Path:
-    local_drama_root = local_drama_root.resolve()
-    video_path = (local_drama_root / relative_path).resolve()
-    try:
-        video_path.relative_to(local_drama_root)
-    except ValueError as exc:
-        raise HTTPException(status_code=403, detail="Invalid video path") from exc
+@app.get("/posters/{relative_path:path}")
+def get_poster(relative_path: str) -> FileResponse:
+    store = get_store()
+    poster_path = safe_media_path(store.local_drama_root, relative_path, POSTER_EXTENSIONS)
+    return FileResponse(poster_path)
 
-    if not video_path.exists() or not video_path.is_file():
-        raise HTTPException(status_code=404, detail="Video not found")
-    if video_path.suffix.lower() not in VIDEO_EXTENSIONS:
-        raise HTTPException(status_code=404, detail="Video not found")
-    return video_path
+
+def safe_video_path(local_drama_root: Path, relative_path: str) -> Path:
+    return safe_media_path(local_drama_root, relative_path, VIDEO_EXTENSIONS)
+
+
+def safe_media_path(local_drama_root: Path, relative_path: str, allowed_extensions: set[str]) -> Path:
+    local_drama_root = local_drama_root.resolve()
+    media_path = (local_drama_root / relative_path).resolve()
+    try:
+        media_path.relative_to(local_drama_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="Invalid media path") from exc
+
+    if not media_path.exists() or not media_path.is_file():
+        raise HTTPException(status_code=404, detail="Media not found")
+    if media_path.suffix.lower() not in allowed_extensions:
+        raise HTTPException(status_code=404, detail="Media not found")
+    return media_path
 
 
 def parse_range_header(range_header: str, file_size: int) -> tuple[int, int]:

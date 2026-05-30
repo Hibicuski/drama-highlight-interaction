@@ -30,7 +30,6 @@ public class DramaPlayer {
         MediaItem mediaItem = MediaItem.fromUri(uri);
         player.setMediaItem(mediaItem);
         player.prepare();
-        player.play();
 
         player.addListener(new Player.Listener() {
             @Override

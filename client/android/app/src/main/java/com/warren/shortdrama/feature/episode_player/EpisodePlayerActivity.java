@@ -26,6 +26,8 @@ public class EpisodePlayerActivity extends AppCompatActivity {
     private InteractionRepository interactionRepository;
     private InteractionOverlayController overlayController;
     private int currentEpisodeId = -1;
+    private boolean playbackReady;
+    private boolean resumed;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,6 +53,8 @@ public class EpisodePlayerActivity extends AppCompatActivity {
         if (episode != null) {
             currentEpisodeId = episode.getId();
             fetchManifest(episode.getId());
+        } else {
+            allowPlayback();
         }
     }
 
@@ -59,11 +63,12 @@ public class EpisodePlayerActivity extends AppCompatActivity {
             @Override
             public void onSuccess(HighlightManifest manifest) {
                 setupScheduler(manifest);
+                allowPlayback();
             }
 
             @Override
             public void onError(Throwable error) {
-                // Ignore for now
+                allowPlayback();
             }
         });
     }
@@ -80,7 +85,12 @@ public class EpisodePlayerActivity extends AppCompatActivity {
                 runOnUiThread(() -> overlayController.hide());
             }
         });
-        scheduler.start();
+        if (resumed) scheduler.start();
+    }
+
+    private void allowPlayback() {
+        playbackReady = true;
+        if (resumed && dramaPlayer != null) dramaPlayer.play();
     }
 
     private void reportInteraction(String highlightId, String actionKey, String actionLabel) {
@@ -102,6 +112,7 @@ public class EpisodePlayerActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        resumed = false;
         if (dramaPlayer != null) dramaPlayer.pause();
         if (scheduler != null) scheduler.stop();
     }
@@ -109,7 +120,8 @@ public class EpisodePlayerActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (dramaPlayer != null) dramaPlayer.play();
+        resumed = true;
+        if (playbackReady && dramaPlayer != null) dramaPlayer.play();
         if (scheduler != null) scheduler.start();
     }
 

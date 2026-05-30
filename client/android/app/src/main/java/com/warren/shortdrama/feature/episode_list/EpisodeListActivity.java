@@ -29,6 +29,7 @@ public class EpisodeListActivity extends AppCompatActivity {
     private RecyclerView rvEpisodeList;
     private TextView tvStatus;
     private EpisodeAdapter adapter;
+    private Call<List<Episode>> episodesCall;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,9 +60,12 @@ public class EpisodeListActivity extends AppCompatActivity {
     private void loadEpisodes() {
         tvStatus.setVisibility(View.VISIBLE);
         tvStatus.setText("Loading episodes...");
-        RetrofitClient.api().getEpisodes(drama.getId()).enqueue(new Callback<List<Episode>>() {
+        if (episodesCall != null) episodesCall.cancel();
+        episodesCall = RetrofitClient.api().getEpisodes(drama.getId());
+        episodesCall.enqueue(new Callback<List<Episode>>() {
             @Override
             public void onResponse(Call<List<Episode>> call, Response<List<Episode>> response) {
+                if (call.isCanceled()) return;
                 tvStatus.setVisibility(View.GONE);
                 if (response.isSuccessful() && response.body() != null) {
                     adapter.submitList(response.body());
@@ -72,6 +76,7 @@ public class EpisodeListActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<List<Episode>> call, Throwable t) {
+                if (call.isCanceled()) return;
                 tvStatus.setVisibility(View.GONE);
                 Toast.makeText(EpisodeListActivity.this, "Network error", Toast.LENGTH_SHORT).show();
             }
@@ -83,5 +88,11 @@ public class EpisodeListActivity extends AppCompatActivity {
         intent.putExtra("drama", drama);
         intent.putExtra("episode", episode);
         startActivity(intent);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (episodesCall != null) episodesCall.cancel();
     }
 }

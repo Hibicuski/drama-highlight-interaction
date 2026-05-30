@@ -27,6 +27,7 @@ public class DramaListActivity extends AppCompatActivity {
     private RecyclerView rvDramaList;
     private TextView tvStatus;
     private DramaAdapter adapter;
+    private Call<List<Drama>> dramasCall;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,9 +46,12 @@ public class DramaListActivity extends AppCompatActivity {
     private void loadDramas() {
         tvStatus.setVisibility(View.VISIBLE);
         tvStatus.setText("Loading dramas from backend...");
-        RetrofitClient.api().getDramas().enqueue(new Callback<List<Drama>>() {
+        if (dramasCall != null) dramasCall.cancel();
+        dramasCall = RetrofitClient.api().getDramas();
+        dramasCall.enqueue(new Callback<List<Drama>>() {
             @Override
             public void onResponse(Call<List<Drama>> call, Response<List<Drama>> response) {
+                if (call.isCanceled()) return;
                 if (response.isSuccessful() && response.body() != null && !response.body().isEmpty()) {
                     adapter.submitList(response.body());
                     tvStatus.setVisibility(View.GONE);
@@ -58,6 +62,7 @@ public class DramaListActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<List<Drama>> call, Throwable t) {
+                if (call.isCanceled()) return;
                 showError("Backend is offline.");
             }
         });
@@ -73,5 +78,11 @@ public class DramaListActivity extends AppCompatActivity {
         tvStatus.setVisibility(View.VISIBLE);
         tvStatus.setText(message);
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (dramasCall != null) dramasCall.cancel();
     }
 }

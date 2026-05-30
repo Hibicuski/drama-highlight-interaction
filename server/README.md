@@ -45,6 +45,7 @@ Projects/
 ├── drama-highlight-interaction/
 └── drama/
     └── 短剧名称/
+        ├── poster.jpg
         ├── 第1集.mp4
         └── 第2集.mp4
 ```
@@ -53,6 +54,12 @@ Projects/
 
 ```text
 GET /videos/{relative_path}
+```
+
+封面图片是可选的。可以在短剧目录下放入 `.jpg`、`.jpeg`、`.png` 或 `.webp` 图片。优先使用名为 `poster`、`cover` 或 `封面` 的图片，否则使用目录中的第一张图片。封面通过以下接口提供：
+
+```text
+GET /posters/{relative_path}
 ```
 
 视频接口支持 HTTP Range 请求，可以满足播放器拖动进度条和分段加载。需要自定义短剧目录时，设置：
