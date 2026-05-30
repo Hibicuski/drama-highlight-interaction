@@ -48,6 +48,5 @@ Android 客户端依赖以下 REST API：
 
 ## 文档
 
-- [客户端说明](client/README.md)
 - [Android 运行说明](client/android/README.md)
 - [分支管理](docs/branching.md)
