@@ -60,6 +60,8 @@ public class InteractionScheduler {
 
         // Check for highlight to show
         for (HighlightPoint hl : manifest.getHighlights()) {
+            if (hl == null || hl.getId() == null) continue;
+
             if (currentPos >= hl.getStartMs() && currentPos <= hl.getEndMs()) {
                 if (!hl.getId().equals(activeHighlightId) && !shownHighlights.contains(hl.getId())) {
                     showHighlight(hl);

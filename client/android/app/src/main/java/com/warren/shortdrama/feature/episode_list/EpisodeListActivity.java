@@ -7,6 +7,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.IntentCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -34,7 +35,7 @@ public class EpisodeListActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_episode_list);
 
-        drama = (Drama) getIntent().getSerializableExtra("drama");
+        drama = IntentCompat.getSerializableExtra(getIntent(), "drama", Drama.class);
         if (drama == null) {
             finish();
             return;
