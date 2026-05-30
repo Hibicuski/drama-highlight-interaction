@@ -84,6 +84,19 @@ class MediaScannerTests(unittest.TestCase):
             self.assertIn("%E6%B5%8B%E8%AF%95%E7%9F%AD%E5%89%A7", episodes[0].video_url)
             self.assertIn(episodes[0].id, manifests)
 
+    def test_preserves_episode_numbers_from_file_names(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            drama_dir = root / "缺集短剧"
+            drama_dir.mkdir()
+            (drama_dir / "第4集.mp4").write_bytes(b"video")
+            (drama_dir / "第2集.mp4").write_bytes(b"video")
+
+            with patch("app.services.media_scanner.subprocess.check_output", return_value="12\n"):
+                _, episodes, _ = scan_local_dramas(root, "http://10.0.2.2:3000")
+
+            self.assertEqual([2, 4], [episode.episode_index for episode in episodes])
+
 
 class InteractionStoreTests(unittest.TestCase):
     def test_counts_interactions_without_mutating_previous_response(self) -> None:

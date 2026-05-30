@@ -1,5 +1,7 @@
 package com.warren.shortdrama.core.network;
 
+import com.warren.shortdrama.BuildConfig;
+
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
@@ -13,12 +15,13 @@ public class RetrofitClient {
 
     public static Retrofit get() {
         if (retrofit == null) {
-            HttpLoggingInterceptor log = new HttpLoggingInterceptor();
-            log.setLevel(HttpLoggingInterceptor.Level.BODY);
-
-            OkHttpClient client = new OkHttpClient.Builder()
-                    .addInterceptor(log)
-                    .build();
+            OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
+            if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor log = new HttpLoggingInterceptor();
+                log.setLevel(HttpLoggingInterceptor.Level.BODY);
+                clientBuilder.addInterceptor(log);
+            }
+            OkHttpClient client = clientBuilder.build();
 
             retrofit = new Retrofit.Builder()
                     .baseUrl(BASE_URL)

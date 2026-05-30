@@ -38,7 +38,7 @@ def scan_local_dramas(local_drama_root: Path, public_base_url: str) -> tuple[lis
     for drama_index, drama_dir in enumerate(drama_dirs, start=1):
         video_files = sorted(
             [entry for entry in drama_dir.iterdir() if entry.is_file() and entry.suffix.lower() in VIDEO_EXTENSIONS],
-            key=lambda item: (episode_index_from_name(item.name), item.name),
+            key=episode_sort_key,
         )
         if not video_files:
             continue
@@ -60,8 +60,10 @@ def scan_local_dramas(local_drama_root: Path, public_base_url: str) -> tuple[lis
             )
         )
 
-        for episode_index, video_file in enumerate(video_files, start=1):
-            episode_id = drama_id * 1000 + episode_index
+        for episode_position, video_file in enumerate(video_files, start=1):
+            parsed_episode_index = episode_index_from_name(video_file.name)
+            episode_index = parsed_episode_index if parsed_episode_index is not None else episode_position
+            episode_id = drama_id * 1000 + episode_position
             relative_path = video_file.relative_to(local_drama_root)
             encoded_path = quote(relative_path.as_posix(), safe="/")
 
@@ -88,13 +90,18 @@ def find_poster_file(drama_dir: Path) -> Path | None:
     return poster_files[0] if poster_files else None
 
 
-def episode_index_from_name(file_name: str) -> int:
+def episode_sort_key(video_file: Path) -> tuple[bool, int, str]:
+    episode_index = episode_index_from_name(video_file.name)
+    return episode_index is None, episode_index or 0, video_file.name
+
+
+def episode_index_from_name(file_name: str) -> int | None:
     match = re.search(r"第\s*(\d+)\s*集", file_name)
     if match:
         return int(match.group(1))
 
     fallback = re.search(r"(\d+)", file_name)
-    return int(fallback.group(1)) if fallback else 999999
+    return int(fallback.group(1)) if fallback else None
 
 
 def video_duration_ms(video_path: Path) -> int:
