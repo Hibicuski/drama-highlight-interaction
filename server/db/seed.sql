@@ -1,0 +1,2 @@
+-- Runtime drama and episode data is scanned from LOCAL_DRAMA_ROOT.
+-- Keep this file empty until a real database replaces the in-memory demo store.

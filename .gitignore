@@ -2,6 +2,10 @@
 node_modules/
 .pnpm-store/
 .yarn/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
 
 # Build outputs
 .gradle/

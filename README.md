@@ -1,6 +1,6 @@
 # Drama Highlight Interaction
 
-短剧高光互动 Demo。当前已完成 Android 客户端 MVP：展示短剧列表和剧集列表、播放 MP4，并在指定剧情时间点展示互动浮层。
+短剧高光互动 Demo。当前已完成 Android 客户端和 FastAPI 后端 MVP：展示真实短剧列表和剧集列表、播放本地 MP4，并在指定剧情时间点展示互动浮层。
 
 ## 当前能力
 
@@ -17,7 +17,7 @@
 .
 ├── client/
 │   └── android/        # Android Studio 项目
-├── server/             # 后端服务，单独开发和提交
+├── server/             # FastAPI 后端、本地视频扫描和接口测试
 ├── docs/               # 项目规划和分支说明
 └── assets/             # Manifest 示例等资源
 ```
@@ -34,7 +34,22 @@ http://10.0.2.2:3000/api/
 
 真机调试时，需要将 `RetrofitClient.BASE_URL` 改为电脑的局域网 IP。
 
-## 后端接口契约
+## FastAPI 后端
+
+后端启动时扫描仓库同级的 `drama` 文件夹。安装 FFmpeg 后，服务会通过 `ffprobe` 读取每集真实时长：
+
+```powershell
+cd server
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+ffprobe -version
+uvicorn app.main:app --host 0.0.0.0 --port 3000
+```
+
+详细配置见 [后端运行说明](server/README.md)。
+
+## 后端接口
 
 Android 客户端依赖以下 REST API：
 
@@ -49,4 +64,5 @@ Android 客户端依赖以下 REST API：
 ## 文档
 
 - [Android 运行说明](client/android/README.md)
+- [后端运行说明](server/README.md)
 - [分支管理](docs/branching.md)

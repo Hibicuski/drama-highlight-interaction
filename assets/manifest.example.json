@@ -1,12 +1,11 @@
 {
-  "dramaId": "demo-drama-001",
-  "episodeId": "episode-001",
+  "episode_id": 101,
   "version": "0.1.0",
   "highlights": [
     {
       "id": "hl-001",
-      "startMs": 12000,
-      "endMs": 18000,
+      "start_ms": 12000,
+      "end_ms": 18000,
       "type": "revenge",
       "intensity": 0.92,
       "template": "dual-button",
@@ -21,8 +20,8 @@
     },
     {
       "id": "hl-002",
-      "startMs": 45000,
-      "endMs": 52000,
+      "start_ms": 45000,
+      "end_ms": 52000,
       "type": "twist",
       "intensity": 0.85,
       "template": "poll",
@@ -33,22 +32,6 @@
           { "key": "surprised", "label": "居然反转" }
         ],
         "effect": "ratio-reveal"
-      }
-    },
-    {
-      "id": "hl-003",
-      "startMs": 78000,
-      "endMs": 90000,
-      "type": "ending-extension",
-      "intensity": 0.75,
-      "template": "branch-card",
-      "payload": {
-        "title": "想看哪种后续",
-        "actions": [
-          { "key": "sweet", "label": "甜蜜番外" },
-          { "key": "revenge", "label": "复仇升级" }
-        ],
-        "effect": "ending-card"
       }
     }
   ]
