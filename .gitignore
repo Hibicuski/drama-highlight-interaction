@@ -2,8 +2,13 @@
 node_modules/
 .pnpm-store/
 .yarn/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
 
 # Build outputs
+.gradle/
 dist/
 build/
 out/
@@ -15,6 +20,7 @@ coverage/
 .env
 .env.*
 !.env.example
+local.properties
 *.log
 logs/
 tmp/
