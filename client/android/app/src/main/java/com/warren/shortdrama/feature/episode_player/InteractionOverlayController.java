@@ -129,6 +129,7 @@ public class InteractionOverlayController {
                             .alpha(0f)
                             .setStartDelay(1000)
                             .setDuration(500)
+                            .withEndAction(() -> tvFeedback.setVisibility(View.GONE))
                             .start();
                 })
                 .start();
@@ -150,7 +151,11 @@ public class InteractionOverlayController {
         tvFeedback.setVisibility(View.VISIBLE);
         tvFeedback.animate().alpha(1f).setDuration(300).withEndAction(() -> {
             handler.postDelayed(() -> {
-                tvFeedback.animate().alpha(0f).setDuration(300).start();
+                tvFeedback.animate()
+                        .alpha(0f)
+                        .setDuration(300)
+                        .withEndAction(() -> tvFeedback.setVisibility(View.GONE))
+                        .start();
                 hide();
             }, 1000);
         }).start();
