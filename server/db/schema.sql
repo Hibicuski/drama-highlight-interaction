@@ -8,6 +8,7 @@ CREATE TABLE drama (
 
 CREATE TABLE episode (
     id INTEGER PRIMARY KEY,
+    content_id TEXT NOT NULL UNIQUE,
     drama_id INTEGER NOT NULL,
     episode_index INTEGER NOT NULL,
     title TEXT NOT NULL,
@@ -18,23 +19,23 @@ CREATE TABLE episode (
 
 CREATE TABLE highlight_point (
     id TEXT PRIMARY KEY,
-    episode_id INTEGER NOT NULL,
+    content_id TEXT NOT NULL,
     start_ms INTEGER NOT NULL,
     end_ms INTEGER NOT NULL,
     type TEXT NOT NULL,
     intensity REAL NOT NULL DEFAULT 1,
     template TEXT NOT NULL DEFAULT 'dual-button',
     payload TEXT NOT NULL DEFAULT '{}',
-    FOREIGN KEY (episode_id) REFERENCES episode(id)
+    FOREIGN KEY (content_id) REFERENCES episode(content_id)
 );
 
 CREATE TABLE interaction_event (
     id INTEGER PRIMARY KEY,
     session_id TEXT,
-    episode_id INTEGER NOT NULL,
+    content_id TEXT NOT NULL,
     highlight_id TEXT NOT NULL,
     action TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (episode_id) REFERENCES episode(id),
+    FOREIGN KEY (content_id) REFERENCES episode(content_id),
     FOREIGN KEY (highlight_id) REFERENCES highlight_point(id)
 );

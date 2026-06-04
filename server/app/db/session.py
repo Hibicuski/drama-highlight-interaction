@@ -18,7 +18,7 @@ class InMemoryStore:
         self.public_base_url = os.getenv("PUBLIC_BASE_URL", f"http://10.0.2.2:{port}")
         self.dramas: list[Drama] = []
         self.episodes: list[Episode] = []
-        self.manifests: dict[int, HighlightManifest] = {}
+        self.manifests: dict[str, HighlightManifest] = {}
         self.interaction_stats: dict[str, InteractionResponse] = {}
         self.interaction_stats_lock = Lock()
         self.reload()
@@ -35,11 +35,16 @@ class InMemoryStore:
     def list_episodes(self, drama_id: int) -> list[Episode]:
         return [episode for episode in self.episodes if episode.drama_id == drama_id]
 
-    def get_manifest(self, episode_id: int) -> HighlightManifest:
-        manifest = self.manifests.get(episode_id)
+    def get_manifest(self, content_id: str) -> HighlightManifest:
+        manifest = self.manifests.get(content_id)
         if manifest is None:
             raise HTTPException(status_code=404, detail="Manifest not found")
         return manifest
+
+    def set_manifest(self, manifest: HighlightManifest) -> None:
+        if not manifest.content_id:
+            raise HTTPException(status_code=400, detail="content_id is required")
+        self.manifests[manifest.content_id] = manifest
 
     def get_aggregate(self, highlight_id: str) -> InteractionResponse:
         with self.interaction_stats_lock:
@@ -47,7 +52,7 @@ class InMemoryStore:
             return stats.model_copy(deep=True)
 
     def report_interaction(self, request: InteractionRequest) -> InteractionResponse:
-        manifest = self.get_manifest(request.episode_id)
+        manifest = self.get_manifest(request.content_id)
         highlight = next((item for item in manifest.highlights if item.id == request.highlight_id), None)
         if highlight is None:
             raise HTTPException(status_code=404, detail="Highlight not found in manifest")
