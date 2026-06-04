@@ -18,33 +18,47 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:layout_margin="24dp"
+        android:layout_margin="@dimen/spacing_5xl"
         android:visibility="gone"
-        app:cardBackgroundColor="#CC000000"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
-        app:strokeColor="#40FFFFFF"
-        app:strokeWidth="1dp">
+        app:cardBackgroundColor="@color/interaction_card_default"
+        app:cardCornerRadius="@dimen/corner_l"
+        app:cardElevation="@dimen/card_elevation_l"
+        app:strokeColor="@color/interaction_stroke_default"
+        app:strokeWidth="@dimen/spacing_xxs">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="@dimen/spacing_4xl">
+
+            <TextView
+                android:id="@+id/tv_interaction_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginBottom="@dimen/spacing_l"
+                android:background="@drawable/bg_interaction_badge"
+                android:paddingHorizontal="@dimen/spacing_xl"
+                android:paddingVertical="@dimen/spacing_s"
+                android:textColor="@color/text_on_dark_secondary"
+                android:textSize="@dimen/text_xs"
+                android:textStyle="bold"
+                tools:text="@string/tools_text_interaction_badge" />
 
             <TextView
                 android:id="@+id/tv_interaction_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginBottom="16dp"
-                android:shadowColor="#80000000"
-                android:shadowDx="2"
-                android:shadowDy="2"
-                android:shadowRadius="4"
-                tools:text="Highlight Title"
+                android:layout_marginBottom="@dimen/spacing_3xl"
+                android:shadowColor="@color/shadow_strong"
+                android:shadowDx="@dimen/spacing_xs"
+                android:shadowDy="@dimen/spacing_xs"
+                android:shadowRadius="@dimen/spacing_s"
+                tools:text="@string/tools_text_interaction_title"
                 android:textColor="@android:color/white"
-                android:textSize="20sp"
+                android:textSize="@dimen/text_xl"
                 android:textStyle="bold" />
 
             <LinearLayout
@@ -52,36 +66,53 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:showDividers="none">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_action_1"
                     style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="60dp"
-                    android:layout_marginEnd="10dp"
+                    android:layout_width="@dimen/spacing_none"
+                    android:layout_height="@dimen/interaction_action_button_height"
+                    android:layout_marginEnd="@dimen/spacing_xl"
                     android:layout_weight="1"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
+                    android:insetTop="@dimen/spacing_none"
+                    android:insetBottom="@dimen/spacing_none"
                     android:textAllCaps="false"
-                    android:textSize="16sp"
+                    android:textSize="@dimen/text_m"
                     android:textStyle="bold"
-                    app:backgroundTint="#FF4081"
-                    app:cornerRadius="12dp" />
+                    app:backgroundTint="@color/interaction_button_default_1"
+                    app:cornerRadius="@dimen/corner_m" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_action_2"
                     style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="60dp"
+                    android:layout_width="@dimen/spacing_none"
+                    android:layout_height="@dimen/interaction_action_button_height"
                     android:layout_weight="1"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
+                    android:insetTop="@dimen/spacing_none"
+                    android:insetBottom="@dimen/spacing_none"
                     android:textAllCaps="false"
-                    android:textSize="16sp"
+                    android:textSize="@dimen/text_m"
                     android:textStyle="bold"
-                    app:backgroundTint="#3F51B5"
-                    app:cornerRadius="12dp" />
+                    app:backgroundTint="@color/interaction_button_default_2"
+                    app:cornerRadius="@dimen/corner_m" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_action_3"
+                    style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+                    android:layout_width="@dimen/spacing_none"
+                    android:layout_height="@dimen/interaction_action_button_height"
+                    android:layout_marginStart="@dimen/spacing_xl"
+                    android:layout_weight="1"
+                    android:insetTop="@dimen/spacing_none"
+                    android:insetBottom="@dimen/spacing_none"
+                    android:textAllCaps="false"
+                    android:textSize="@dimen/text_episode_button_compact"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    app:backgroundTint="@color/interaction_button_default_3"
+                    app:cornerRadius="@dimen/corner_m" />
             </LinearLayout>
 
             <TextView
@@ -89,9 +120,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginTop="12dp"
-                android:textColor="#CCFFFFFF"
-                android:textSize="14sp"
+                android:layout_marginTop="@dimen/spacing_2xl"
+                android:textColor="@color/text_on_dark_secondary"
+                android:textSize="@dimen/text_s"
                 android:visibility="gone" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -101,13 +132,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:shadowColor="#40000000"
-        android:shadowDx="4"
-        android:shadowDy="4"
-        android:shadowRadius="8"
-        tools:text="感谢参与！"
-        android:textColor="#FFEB3B"
-        android:textSize="40sp"
+        android:shadowColor="@color/shadow_soft"
+        android:shadowDx="@dimen/spacing_s"
+        android:shadowDy="@dimen/spacing_s"
+        android:shadowRadius="@dimen/spacing_l"
+        tools:text="@string/interaction_feedback_simple"
+        android:textColor="@color/interaction_feedback_text"
+        android:textSize="@dimen/text_feedback"
         android:textStyle="bold"
         android:visibility="gone" />
 
@@ -116,9 +147,9 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|start"
-        android:layout_margin="16dp"
+        android:layout_margin="@dimen/spacing_3xl"
         android:textColor="@android:color/white"
-        android:textSize="20sp"
+        android:textSize="@dimen/text_xl"
         android:textStyle="bold" />
 
 </FrameLayout>

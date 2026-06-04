@@ -45,9 +45,9 @@ public class DramaListActivity extends AppCompatActivity {
 
     private void loadDramas() {
         tvStatus.setVisibility(View.VISIBLE);
-        tvStatus.setText("Loading dramas from backend...");
+        tvStatus.setText(R.string.status_loading_dramas);
         if (dramasCall != null) dramasCall.cancel();
-        dramasCall = RetrofitClient.api().getDramas();
+        dramasCall = RetrofitClient.api(this).getDramas();
         dramasCall.enqueue(new Callback<List<Drama>>() {
             @Override
             public void onResponse(Call<List<Drama>> call, Response<List<Drama>> response) {
@@ -56,21 +56,21 @@ public class DramaListActivity extends AppCompatActivity {
                     adapter.submitList(response.body());
                     tvStatus.setVisibility(View.GONE);
                 } else {
-                    showError("Backend returned no dramas.");
+                    showError(getString(R.string.status_backend_no_dramas));
                 }
             }
 
             @Override
             public void onFailure(Call<List<Drama>> call, Throwable t) {
                 if (call.isCanceled()) return;
-                showError("Backend is offline.");
+                showError(getString(R.string.status_backend_offline));
             }
         });
     }
 
     private void openDrama(Drama drama) {
         Intent intent = new Intent(DramaListActivity.this, EpisodeListActivity.class);
-        intent.putExtra("drama", drama);
+        intent.putExtra(getString(R.string.extra_drama), drama);
         startActivity(intent);
     }
 

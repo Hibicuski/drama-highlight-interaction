@@ -4,33 +4,33 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="@dimen/spacing_l">
 
     <TextView
         android:id="@+id/tv_drama_title_header"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        tools:text="Episodes"
-        android:textSize="24sp"
+        tools:text="@string/tools_text_episodes"
+        android:textSize="@dimen/text_2xl"
         android:textStyle="bold"
-        android:layout_marginBottom="8dp"/>
+        android:layout_marginBottom="@dimen/spacing_l"/>
 
     <TextView
         android:id="@+id/tv_drama_description"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:textColor="#666666"
-        android:textSize="14sp" />
+        android:layout_marginBottom="@dimen/spacing_3xl"
+        android:textColor="@color/text_secondary"
+        android:textSize="@dimen/text_s" />
 
     <TextView
         android:id="@+id/tv_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="8dp"
-        tools:text="Loading episodes..."
-        android:textColor="#666666"
-        android:textSize="14sp" />
+        android:paddingBottom="@dimen/spacing_l"
+        tools:text="@string/tools_text_loading_episodes"
+        android:textColor="@color/text_secondary"
+        android:textSize="@dimen/text_s" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_episode_list"

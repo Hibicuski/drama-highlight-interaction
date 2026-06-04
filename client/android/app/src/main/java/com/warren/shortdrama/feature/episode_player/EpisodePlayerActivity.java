@@ -25,7 +25,7 @@ public class EpisodePlayerActivity extends AppCompatActivity {
     private InteractionScheduler scheduler;
     private InteractionRepository interactionRepository;
     private InteractionOverlayController overlayController;
-    private int currentEpisodeId = -1;
+    private String currentContentId = "";
     private boolean playbackReady;
     private boolean resumed;
 
@@ -34,32 +34,32 @@ public class EpisodePlayerActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        interactionRepository = new InteractionRepository();
+        interactionRepository = new InteractionRepository(this);
         overlayController = new InteractionOverlayController(findViewById(R.id.main));
 
         PlayerView playerView = findViewById(R.id.player_view);
         tvTitle = findViewById(R.id.tv_player_drama_title);
 
-        Drama drama = IntentCompat.getSerializableExtra(getIntent(), "drama", Drama.class);
-        Episode episode = IntentCompat.getSerializableExtra(getIntent(), "episode", Episode.class);
+        Drama drama = IntentCompat.getSerializableExtra(getIntent(), getString(R.string.extra_drama), Drama.class);
+        Episode episode = IntentCompat.getSerializableExtra(getIntent(), getString(R.string.extra_episode), Episode.class);
         if (drama != null) {
-            String episodeTitle = episode == null ? "Episode 1" : episode.getTitle();
-            tvTitle.setText(drama.getTitle() + " - " + episodeTitle);
+            String episodeTitle = episode == null ? getString(R.string.player_default_episode_title) : episode.getTitle();
+            tvTitle.setText(getString(R.string.player_title_format, drama.getTitle(), episodeTitle));
         }
 
         String videoUrl = episode == null ? "" : episode.getVideoUrl();
         dramaPlayer = new DramaPlayer(this, playerView, videoUrl);
 
         if (episode != null) {
-            currentEpisodeId = episode.getId();
-            fetchManifest(episode.getId());
+            currentContentId = episode.getContentId();
+            fetchManifest(episode.getContentId());
         } else {
             allowPlayback();
         }
     }
 
-    private void fetchManifest(int episodeId) {
-        interactionRepository.fetchManifest(episodeId, new InteractionRepository.ManifestCallback() {
+    private void fetchManifest(String contentId) {
+        interactionRepository.fetchManifest(contentId, new InteractionRepository.ManifestCallback() {
             @Override
             public void onSuccess(HighlightManifest manifest) {
                 setupScheduler(manifest);
@@ -74,17 +74,22 @@ public class EpisodePlayerActivity extends AppCompatActivity {
     }
 
     private void setupScheduler(HighlightManifest manifest) {
-        scheduler = new InteractionScheduler(dramaPlayer, manifest, new InteractionScheduler.InteractionListener() {
-            @Override
-            public boolean onShowHighlight(HighlightPoint highlight) {
-                return overlayController.showHighlight(highlight, EpisodePlayerActivity.this::reportInteraction);
-            }
+        scheduler = new InteractionScheduler(
+                dramaPlayer,
+                manifest,
+                new InteractionScheduler.InteractionListener() {
+                    @Override
+                    public boolean onShowHighlight(HighlightPoint highlight) {
+                        return overlayController.showHighlight(highlight, EpisodePlayerActivity.this::reportInteraction);
+                    }
 
-            @Override
-            public void onHideHighlight(String highlightId) {
-                runOnUiThread(() -> overlayController.hide());
-            }
-        });
+                    @Override
+                    public void onHideHighlight(String highlightId) {
+                        runOnUiThread(() -> overlayController.hide());
+                    }
+                },
+                getResources().getInteger(R.integer.interaction_scheduler_tick_ms)
+        );
         if (resumed) scheduler.start();
     }
 
@@ -96,7 +101,7 @@ public class EpisodePlayerActivity extends AppCompatActivity {
     private void reportInteraction(String highlightId, String actionKey, String actionLabel) {
         overlayController.setActionsEnabled(false);
 
-        interactionRepository.reportInteraction(currentEpisodeId, highlightId, actionKey, new InteractionRepository.ReportCallback() {
+        interactionRepository.reportInteraction(currentContentId, highlightId, actionKey, new InteractionRepository.ReportCallback() {
             @Override
             public void onSuccess(InteractionModels.InteractionResponse stats) {
                 overlayController.showFeedback(actionLabel, stats);

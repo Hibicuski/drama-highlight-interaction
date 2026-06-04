@@ -3,6 +3,7 @@ package com.warren.shortdrama.feature.episode_list;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -10,10 +11,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.warren.shortdrama.R;
 import com.warren.shortdrama.core.model.Episode;
+import com.bumptech.glide.Glide;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHolder> {
 
@@ -55,22 +56,34 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
         private final TextView tvIndex;
         private final TextView tvTitle;
         private final TextView tvDuration;
+        private final ImageView ivPoster;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
+            ivPoster = itemView.findViewById(R.id.iv_episode_poster);
             tvIndex = itemView.findViewById(R.id.tv_episode_index);
             tvTitle = itemView.findViewById(R.id.tv_episode_title);
             tvDuration = itemView.findViewById(R.id.tv_episode_duration);
         }
 
         public void bind(Episode episode, OnEpisodeClickListener listener) {
-            tvIndex.setText(String.format(Locale.getDefault(), "Episode %d", episode.getIndex()));
+            tvIndex.setText(tvIndex.getContext().getString(R.string.episode_index_format, episode.getIndex()));
             tvTitle.setText(episode.getTitle());
 
             long seconds = episode.getDurationMs() / 1000;
             long minutes = seconds / 60;
             long remainingSeconds = seconds % 60;
-            tvDuration.setText(String.format(Locale.getDefault(), "Duration: %02d:%02d", minutes, remainingSeconds));
+            tvDuration.setText(tvDuration.getContext().getString(
+                    R.string.episode_duration_format,
+                    minutes,
+                    remainingSeconds
+            ));
+            Glide.with(ivPoster)
+                    .load(episode.getPosterUrl())
+                    .placeholder(android.R.color.darker_gray)
+                    .error(android.R.color.darker_gray)
+                    .centerCrop()
+                    .into(ivPoster);
 
             itemView.setOnClickListener(v -> listener.onEpisodeClick(episode));
         }

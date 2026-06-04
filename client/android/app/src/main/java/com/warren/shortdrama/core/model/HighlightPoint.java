@@ -30,8 +30,12 @@ public class HighlightPoint implements Serializable {
         @SerializedName("actions")
         private List<Action> actions;
 
+        @SerializedName("effect")
+        private String effect;
+
         public String getTitle() { return title; }
         public List<Action> getActions() { return actions; }
+        public String getEffect() { return effect; }
     }
 
     public static class Action implements Serializable {
@@ -41,13 +45,22 @@ public class HighlightPoint implements Serializable {
         @SerializedName("label")
         private String label;
 
+        @SerializedName("tone")
+        private String tone;
+
+        @SerializedName("icon")
+        private String icon;
+
         public String getKey() { return key; }
         public String getLabel() { return label; }
+        public String getTone() { return tone; }
+        public String getIcon() { return icon; }
     }
 
     public String getId() { return id; }
     public long getStartMs() { return startMs; }
     public long getEndMs() { return endMs; }
+    public String getType() { return type; }
     public String getTemplate() { return template; }
     public Payload getPayload() { return payload; }
 }

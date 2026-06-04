@@ -36,7 +36,7 @@ public class EpisodeListActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_episode_list);
 
-        drama = IntentCompat.getSerializableExtra(getIntent(), "drama", Drama.class);
+        drama = IntentCompat.getSerializableExtra(getIntent(), getString(R.string.extra_drama), Drama.class);
         if (drama == null) {
             finish();
             return;
@@ -59,9 +59,9 @@ public class EpisodeListActivity extends AppCompatActivity {
 
     private void loadEpisodes() {
         tvStatus.setVisibility(View.VISIBLE);
-        tvStatus.setText("Loading episodes...");
+        tvStatus.setText(R.string.status_loading_episodes);
         if (episodesCall != null) episodesCall.cancel();
-        episodesCall = RetrofitClient.api().getEpisodes(drama.getId());
+        episodesCall = RetrofitClient.api(this).getEpisodes(drama.getId());
         episodesCall.enqueue(new Callback<List<Episode>>() {
             @Override
             public void onResponse(Call<List<Episode>> call, Response<List<Episode>> response) {
@@ -70,7 +70,7 @@ public class EpisodeListActivity extends AppCompatActivity {
                 if (response.isSuccessful() && response.body() != null) {
                     adapter.submitList(response.body());
                 } else {
-                    Toast.makeText(EpisodeListActivity.this, "Failed to load episodes", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(EpisodeListActivity.this, R.string.error_load_episodes_failed, Toast.LENGTH_SHORT).show();
                 }
             }
 
@@ -78,15 +78,15 @@ public class EpisodeListActivity extends AppCompatActivity {
             public void onFailure(Call<List<Episode>> call, Throwable t) {
                 if (call.isCanceled()) return;
                 tvStatus.setVisibility(View.GONE);
-                Toast.makeText(EpisodeListActivity.this, "Network error", Toast.LENGTH_SHORT).show();
+                Toast.makeText(EpisodeListActivity.this, R.string.error_network, Toast.LENGTH_SHORT).show();
             }
         });
     }
 
     private void openPlayer(Episode episode) {
         Intent intent = new Intent(this, EpisodePlayerActivity.class);
-        intent.putExtra("drama", drama);
-        intent.putExtra("episode", episode);
+        intent.putExtra(getString(R.string.extra_drama), drama);
+        intent.putExtra(getString(R.string.extra_episode), episode);
         startActivity(intent);
     }
 

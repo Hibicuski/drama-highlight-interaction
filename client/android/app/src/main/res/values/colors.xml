@@ -4,4 +4,48 @@
     <color name="white">#FFFFFFFF</color>
     <color name="teal_700">#FF018786</color>
     <color name="purple_700">#FF3700B3</color>
+    <color name="text_secondary">#666666</color>
+    <color name="text_tertiary">#999999</color>
+    <color name="episode_poster_placeholder">#333333</color>
+    <color name="avatar_placeholder">#CCCCCC</color>
+
+    <color name="surface_scrim_13">#22000000</color>
+    <color name="surface_scrim_20">#33000000</color>
+    <color name="surface_scrim_25">#40000000</color>
+    <color name="surface_white_20">#33FFFFFF</color>
+    <color name="surface_white_25">#40FFFFFF</color>
+    <color name="text_on_dark_secondary">#CCFFFFFF</color>
+    <color name="shadow_strong">#80000000</color>
+    <color name="shadow_soft">#40000000</color>
+    <color name="interaction_feedback_text">#FFEB3B</color>
+
+    <color name="interaction_card_default">#CC000000</color>
+    <color name="interaction_stroke_default">#40FFFFFF</color>
+    <color name="interaction_card_poll">#DD102040</color>
+    <color name="interaction_stroke_poll">#6688CCFF</color>
+    <color name="interaction_card_tap_boost">#DD2A1200</color>
+    <color name="interaction_stroke_tap_boost">#80FFB74D</color>
+    <color name="interaction_card_twist">#DD170029</color>
+    <color name="interaction_stroke_twist">#80CE93D8</color>
+    <color name="interaction_card_slap_face">#DD300000</color>
+    <color name="interaction_stroke_slap_face">#80FF5252</color>
+    <color name="interaction_card_funny">#DD263000</color>
+    <color name="interaction_stroke_funny">#80CDDC39</color>
+
+    <color name="interaction_button_default_1">#FF4081</color>
+    <color name="interaction_button_default_2">#3F51B5</color>
+    <color name="interaction_button_default_3">#00BCD4</color>
+    <color name="interaction_button_poll_1">#4CAF50</color>
+    <color name="interaction_button_poll_2">#FF9800</color>
+    <color name="interaction_button_poll_3">#9C27B0</color>
+    <color name="interaction_button_tap_boost_1">#FF5722</color>
+    <color name="interaction_button_tap_boost_2">#FF9800</color>
+    <color name="interaction_button_tap_boost_3">#FFC107</color>
+    <color name="interaction_tone_positive">#E91E63</color>
+    <color name="interaction_tone_negative">#607D8B</color>
+    <color name="interaction_tone_shocked">#7E57C2</color>
+    <color name="interaction_tone_funny">#FFB300</color>
+    <color name="interaction_tone_confused">#26A69A</color>
+    <color name="interaction_tone_support">#FF5722</color>
+    <color name="interaction_tone_calm">#3F51B5</color>
 </resources>

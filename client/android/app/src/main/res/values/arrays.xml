@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <array name="interaction_default_button_colors">
+        <item>@color/interaction_button_default_1</item>
+        <item>@color/interaction_button_default_2</item>
+        <item>@color/interaction_button_default_3</item>
+    </array>
+
+    <array name="interaction_poll_button_colors">
+        <item>@color/interaction_button_poll_1</item>
+        <item>@color/interaction_button_poll_2</item>
+        <item>@color/interaction_button_poll_3</item>
+    </array>
+
+    <array name="interaction_tap_boost_button_colors">
+        <item>@color/interaction_button_tap_boost_1</item>
+        <item>@color/interaction_button_tap_boost_2</item>
+        <item>@color/interaction_button_tap_boost_3</item>
+    </array>
+</resources>

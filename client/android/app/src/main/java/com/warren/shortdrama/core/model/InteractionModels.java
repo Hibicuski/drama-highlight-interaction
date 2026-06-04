@@ -6,8 +6,8 @@ import java.util.Map;
 public class InteractionModels {
 
     public static class InteractionRequest {
-        @SerializedName("episode_id")
-        private int episodeId;
+        @SerializedName("content_id")
+        private String contentId;
 
         @SerializedName("highlight_id")
         private String highlightId;
@@ -15,8 +15,8 @@ public class InteractionModels {
         @SerializedName("action")
         private String action;
 
-        public InteractionRequest(int episodeId, String highlightId, String action) {
-            this.episodeId = episodeId;
+        public InteractionRequest(String contentId, String highlightId, String action) {
+            this.contentId = contentId;
             this.highlightId = highlightId;
             this.action = action;
         }

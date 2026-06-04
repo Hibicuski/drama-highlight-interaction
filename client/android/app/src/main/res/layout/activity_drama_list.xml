@@ -4,24 +4,24 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="@dimen/spacing_l">
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/short_dramas"
-        android:textSize="24sp"
+        android:textSize="@dimen/text_2xl"
         android:textStyle="bold"
-        android:layout_marginBottom="16dp"/>
+        android:layout_marginBottom="@dimen/spacing_3xl"/>
 
     <TextView
         android:id="@+id/tv_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="8dp"
-        tools:text="Loading dramas..."
-        android:textColor="#666666"
-        android:textSize="14sp" />
+        android:paddingBottom="@dimen/spacing_l"
+        tools:text="@string/tools_text_loading_dramas"
+        android:textColor="@color/text_secondary"
+        android:textSize="@dimen/text_s" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_drama_list"
