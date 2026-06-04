@@ -31,11 +31,11 @@
 | 表 | 字段 |
 |---|---|
 | `drama` | `id`, `title`, `poster`, `tags` |
-| `episode` | `id`, `drama_id`, `title`, `video_url`, `duration_ms` |
-| `highlight_point` | `id`, `episode_id`, `start_ms`, `end_ms`, `type`, `intensity`, `payload` |
-| `interaction_event` | `id`, `session_id`, `episode_id`, `highlight_id`, `action`, `created_at` |
-| `aggregate_snapshot` | `episode_id`, `highlight_id`, `counter`, `updated_at` |
-| `branch_session` | `id`, `session_id`, `episode_id`, `prompt`, `result`, `status` |
+| `episode` | `id`, `content_id`, `drama_id`, `title`, `video_url`, `duration_ms` |
+| `highlight_point` | `id`, `content_id`, `start_ms`, `end_ms`, `type`, `intensity`, `payload` |
+| `interaction_event` | `id`, `session_id`, `content_id`, `highlight_id`, `action`, `created_at` |
+| `aggregate_snapshot` | `content_id`, `highlight_id`, `counter`, `updated_at` |
+| `branch_session` | `id`, `session_id`, `content_id`, `prompt`, `result`, `status` |
 
 ## AI 辅助说明
 

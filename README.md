@@ -8,7 +8,8 @@
 - 展示短剧目录中的可选封面图片
 - 使用 Media3 ExoPlayer 播放 MP4
 - 获取每集高光 Manifest
-- 根据播放进度自动展示双按钮互动浮层
+- 根据播放进度自动展示互动浮层
+- 支持 1 到 3 个互动选项、白名单 UI 风格、选项图标和选项色彩
 - 上报用户选择并展示聚合互动人数
 - 在单次播放中避免重复展示同一个高光点
 
@@ -18,7 +19,7 @@
 .
 ├── client/
 │   └── android/        # Android Studio 项目
-├── server/             # FastAPI 后端、本地视频扫描和接口测试
+├── server/             # FastAPI 后端、本地视频扫描、AI 高光生成和接口测试
 ├── docs/               # 项目规划和分支说明
 └── assets/             # Manifest 示例等资源
 ```
@@ -56,11 +57,11 @@ Android 客户端依赖以下 REST API：
 
 - `GET /api/dramas`
 - `GET /api/dramas/{id}/episodes`
-- `GET /api/episodes/{id}/manifest`
+- `GET /api/contents/{content_id}/manifest`
 - `POST /api/interactions`
 - `GET /api/highlights/{id}/aggregate`
 
-剧集数据中的 `video_url` 应指向可访问的 MP4 地址。如果地址为空，客户端会使用远程示例视频兜底；仓库内不再包含本地示例 MP4。
+剧集数据中的 `content_id` 是由视频相对路径 hash 得到的稳定内容 ID。`Episode.id` 仍可能存在，但只作为当前扫描结果里的运行时数字 ID，不再用于 Manifest 文件名、Manifest 查询或互动上报。
 
 ## 文档
 
