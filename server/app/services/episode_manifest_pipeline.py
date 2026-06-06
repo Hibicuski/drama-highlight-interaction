@@ -12,6 +12,15 @@ from app.services.highlight_generator import generate_highlight_candidates
 from app.services.manifest_store import content_id_from_relative_path, generated_manifest_root, save_manifest
 from app.services.media_scanner import video_duration_ms
 from app.services.model_client import AudioTranscriptionClient, ModelClient
+from app.services.text_quality import repair_mojibake_in_value
+from app.services.transcript_enricher import (
+    basic_enriched_transcript,
+    enrich_transcript,
+    format_enriched_transcript,
+    has_useful_enrichment,
+    normalize_enriched_transcript,
+    save_enriched_transcript,
+)
 
 
 def generated_transcript_root() -> Path:
@@ -19,17 +28,26 @@ def generated_transcript_root() -> Path:
     return Path(os.getenv("TRANSCRIPT_ROOT", server_root / "data" / "transcripts")).resolve()
 
 
+def generated_enriched_transcript_root() -> Path:
+    server_root = Path(__file__).resolve().parents[2]
+    return Path(os.getenv("ENRICHED_TRANSCRIPT_ROOT", server_root / "data" / "enriched_transcripts")).resolve()
+
+
 def generate_episode_manifest(
     video_path: Path,
     *,
     summary: str = "",
+    series_context: str = "",
     transcript_json_path: Path | None = None,
+    enriched_transcript_json_path: Path | None = None,
+    speaker_separation: bool = False,
     manifest_root: Path | None = None,
     transcript_root: Path | None = None,
+    enriched_transcript_root: Path | None = None,
     transcription_client: AudioTranscriptionClient | None = None,
     model_client: ModelClient | None = None,
     local_drama_root: Path | None = None,
-) -> tuple[HighlightManifest, Path, Path]:
+) -> tuple[HighlightManifest, Path, Path | None, Path]:
     video_path = video_path.resolve()
     if not video_path.exists() or not video_path.is_file():
         raise FileNotFoundError(f"Video file not found: {video_path}")
@@ -42,13 +60,52 @@ def generate_episode_manifest(
         if transcript_json_path
         else transcribe_video(video_path, transcription_client or AudioTranscriptionClient())
     )
+    transcript = repair_mojibake_in_value(transcript)
     transcript_path = save_transcript(content_id, transcript, transcript_root)
-    timed_transcript = format_timed_transcript(transcript)
+    enriched_transcript_path: Path | None = None
+    use_speaker_context = speaker_separation or enriched_transcript_json_path is not None
+    if enriched_transcript_json_path:
+        enriched_transcript = normalize_enriched_transcript(
+            basic_enriched_transcript(transcript),
+            load_transcript(enriched_transcript_json_path),
+        )
+        if not has_useful_enrichment(enriched_transcript):
+            enriched_transcript = enrich_transcript(
+                transcript,
+                summary=summary,
+                series_context=series_context,
+                model_client=model_client,
+            )
+    elif speaker_separation:
+        enriched_transcript = enrich_transcript(
+            transcript,
+            summary=summary,
+            series_context=series_context,
+            model_client=model_client,
+        )
+    else:
+        enriched_transcript = None
+
+    if enriched_transcript is not None:
+        enriched_transcript = repair_mojibake_in_value(enriched_transcript)
+        selected_enriched_transcript_root = enriched_transcript_root or generated_enriched_transcript_root()
+        enriched_transcript_path = save_enriched_transcript(
+            content_id,
+            enriched_transcript,
+            selected_enriched_transcript_root,
+        )
+
+    timed_transcript = (
+        format_enriched_transcript(enriched_transcript) if use_speaker_context and enriched_transcript else ""
+    ) or format_timed_transcript(transcript)
 
     manifest = generate_highlight_candidates(
         HighlightCandidateRequest(
             content_id=content_id,
-            summary=summary,
+            summary=combined_manifest_summary(
+                enriched_transcript.get("summary") if enriched_transcript else summary,
+                series_context if use_speaker_context else "",
+            ),
             transcript=timed_transcript,
             duration_ms=duration_ms,
         ),
@@ -65,9 +122,20 @@ def generate_episode_manifest(
             "video_path": str(video_path),
             "manifest": str(selected_manifest_root.resolve() / f"{content_id}.json"),
             "transcript": str(transcript_path),
+            **({"enriched_transcript": str(enriched_transcript_path)} if enriched_transcript_path else {}),
         },
     )
-    return manifest, transcript_path, manifest_path
+    return manifest, transcript_path, enriched_transcript_path, manifest_path
+
+
+def combined_manifest_summary(current_summary: str, series_context: str) -> str:
+    current = str(current_summary or "").strip()
+    previous = str(series_context or "").strip()
+    if previous and current:
+        return f"说话人参考:\n{previous[:1600]}\n\n补充摘要:\n{current}"
+    if previous:
+        return f"说话人参考:\n{previous[:1600]}"
+    return current
 
 
 def transcribe_video(video_path: Path, client: AudioTranscriptionClient) -> dict[str, Any]:

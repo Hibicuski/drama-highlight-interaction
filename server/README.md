@@ -121,6 +121,7 @@ content_id    = 2fe8f92ec371216d
 ```text
 server/data/manifests/2fe8f92ec371216d.json
 server/data/transcripts/2fe8f92ec371216d.json
+server/data/enriched_transcripts/2fe8f92ec371216d.json
 server/data/index.json
 ```
 
@@ -128,7 +129,19 @@ server/data/index.json
 
 ## AI 高光 Manifest 离线生成
 
-播放链路不会实时等待模型。对于没有字幕的 MP4，先离线提取音频并转写，再让模型生成带时间窗口的互动 Manifest。生成文件默认保存在 `server/data/`，服务重启扫描视频时会优先加载生成结果；没有生成文件时继续使用默认 Manifest。
+播放链路不会实时等待模型。对于没有字幕的 MP4，先离线提取音频并转写，再让模型基于原始时间戳字幕生成互动 Manifest。生成文件默认保存在 `server/data/`，服务重启扫描视频时会优先加载生成结果；没有合格 Manifest 时返回空 `highlights`，不会伪造固定高光。
+
+离线生成链路会产出三类文件：
+
+```text
+server/data/transcripts/{content_id}.json           # ASR 原始时间戳字幕
+server/data/enriched_transcripts/{content_id}.json  # 可选：ASR 字幕 + 说话人标注，只作辅助上下文
+server/data/manifests/{content_id}.json             # 客户端播放使用的高光互动 Manifest
+```
+
+说话人分离默认关闭，因为只靠字幕文本猜 speaker 容易引入错误。显式启用时，它只补充 `speaker`、`speaker_name` 和 `confidence`，不会覆盖 ASR 原始台词和时间戳，也不会生成 `scene`、`emotion`、`beat_type`、`highlight_reason` 这类剧情判断；低置信度说话人信息不会进入高光生成上下文。
+
+短剧是连续剧集时，批量脚本会按“短剧目录名 + 集数”顺序处理。默认模式下，每集独立使用自己的 ASR 字幕生成 Manifest，不再把上一集推理结果传给下一集。只有显式启用说话人分离时，脚本才会复用前面可用的 speaker 映射。
 
 配置 OpenAI 兼容的文本模型和语音识别模型。代码只依赖三项通用配置：`MODEL_BASE_URL`、`MODEL_API_KEY`、`MODEL_NAME`。可以参考 `.env.example`：
 
@@ -185,11 +198,33 @@ cd server
   --transcript-json "D:\videos\第1集-transcript.json"
 ```
 
-文本模型输出会经过后端规则校验：高光时间窗口必须有效且不重叠，组件、动效、选项 tone 和 icon 必须来自白名单，互动选项必须可用。如果模型第一次返回的 JSON 无法解析或不满足规则，后端会自动请求一次修复。
+如果确实想实验文本级说话人分离，需要显式启用：
+
+```powershell
+.\.venv\Scripts\python.exe -m app.scripts.generate_episode_manifest `
+  "D:\videos\drama\短剧名称\第1集.mp4" `
+  --local-drama-root "D:\videos\drama" `
+  --transcript-json "D:\videos\第1集-transcript.json" `
+  --separate-speakers
+```
+
+如果已经有可用的说话人标注结果，也可以显式传入：
+
+```powershell
+.\.venv\Scripts\python.exe -m app.scripts.generate_episode_manifest `
+  "D:\videos\drama\短剧名称\第1集.mp4" `
+  --local-drama-root "D:\videos\drama" `
+  --transcript-json "D:\videos\第1集-transcript.json" `
+  --enriched-transcript-json "D:\videos\第1集-enriched-transcript.json"
+```
+
+文本模型输出会经过后端规则校验：高光时间窗口必须有效且不重叠，组件、动效、选项 tone 和 icon 必须来自白名单，互动选项必须可用，标题不能是英文、乱码或低质攻击性网感词。如果模型返回的 JSON 无法解析或不满足规则，后端最多会请求 3 次修复。
 
 ## 批量生成
 
 仓库内置 PowerShell 批处理脚本。脚本会扫描 `Projects/drama` 下的全部短剧，按视频相对路径 hash 生成稳定文件名，并逐集生成 Manifest。API Key 通过隐藏输入读取，只保存在当前 PowerShell 进程中，不会写入文件。
+
+批量脚本会在每部剧内部按文件名中的集数排序生成。默认只复用 ASR 转写，不做文本级说话人分离，也不读取旧的 enriched 文件。只有使用 `-SeparateSpeakers` 时，才会维护一个最多约 1600 字的滚动 speaker 参考。
 
 先预览待处理剧集，不会调用模型：
 
@@ -228,10 +263,16 @@ cd server
 .\scripts\generate_all_manifests.cmd -Force
 ```
 
-已有转写文件默认会复用，避免重复消耗音频理解调用。需要重新转写时使用：
+已有转写文件默认会复用。需要重新转写时使用：
 
 ```powershell
 .\scripts\generate_all_manifests.cmd -Retranscribe -Limit 1
+```
+
+实验说话人分离时使用：
+
+```powershell
+.\scripts\generate_all_manifests.cmd -SeparateSpeakers -Reenrich -Force -Limit 1
 ```
 
 如果 FFmpeg 没有加入 `PATH`，显式指定其 `bin` 目录：

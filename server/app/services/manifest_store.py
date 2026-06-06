@@ -9,14 +9,30 @@ from pathlib import Path
 from typing import Any
 
 from app.db.models import HighlightAction, HighlightManifest, HighlightPayload, HighlightPoint
+from app.services.text_quality import is_usable_interaction_copy, is_usable_title_copy
 
 ALLOWED_TEMPLATES = {"dual-button", "poll", "tap-boost"}
 ALLOWED_EFFECTS = {None, "particle-burst", "ratio-reveal", "pulse"}
 ALLOWED_ACTION_TONES = {None, "positive", "negative", "shocked", "funny", "confused", "support", "calm"}
 ALLOWED_ACTION_ICONS = {None, "heart", "fire", "shock", "laugh", "question", "check", "boost"}
+ALLOWED_HIGHLIGHT_TYPES = {
+    "satisfying",
+    "twist",
+    "revenge",
+    "slap-face",
+    "funny",
+    "sweet",
+    "suspense",
+    "reveal",
+    "conflict",
+    "famous-scene",
+}
 MAX_HIGHLIGHTS = 4
 MIN_WINDOW_MS = 2000
 MAX_WINDOW_MS = 8000
+MAX_TITLE_CHARS = 12
+MAX_ACTION_LABEL_CHARS = 6
+MIN_MULTI_ACTION_TEMPLATE_ACTIONS = 2
 LOGGER = logging.getLogger(__name__)
 
 
@@ -78,8 +94,44 @@ def load_manifest(
 
 def parse_model_manifest(raw_text: str, content_id: str, duration_ms: int = 0) -> HighlightManifest:
     cleaned_text = strip_markdown_fence(raw_text)
-    manifest = HighlightManifest.model_validate_json(cleaned_text)
+    try:
+        raw_manifest = json.loads(cleaned_text)
+        validate_required_manifest_fields(raw_manifest)
+        manifest = HighlightManifest.model_validate(raw_manifest)
+    except ValueError as exc:
+        raise ValueError(f"Invalid manifest JSON or missing required fields: {exc}") from exc
     return normalize_manifest(manifest, content_id, duration_ms)
+
+
+def validate_required_manifest_fields(raw_manifest: Any) -> None:
+    if not isinstance(raw_manifest, dict):
+        raise ValueError("manifest root must be a JSON object")
+    for field in ("content_id", "version", "highlights"):
+        if field not in raw_manifest:
+            raise ValueError(f"missing required field: {field}")
+    if not isinstance(raw_manifest["highlights"], list):
+        raise ValueError("highlights must be a list")
+
+    for index, highlight in enumerate(raw_manifest["highlights"], start=1):
+        if not isinstance(highlight, dict):
+            raise ValueError(f"highlight {index} must be an object")
+        for field in ("id", "start_ms", "end_ms", "type", "template", "payload"):
+            if field not in highlight:
+                raise ValueError(f"highlight {index} missing required field: {field}")
+        payload = highlight["payload"]
+        if not isinstance(payload, dict):
+            raise ValueError(f"highlight {index} payload must be an object")
+        for field in ("title", "actions", "effect"):
+            if field not in payload:
+                raise ValueError(f"highlight {index} payload missing required field: {field}")
+        if not isinstance(payload["actions"], list):
+            raise ValueError(f"highlight {index} payload.actions must be a list")
+        for action_index, action in enumerate(payload["actions"], start=1):
+            if not isinstance(action, dict):
+                raise ValueError(f"highlight {index} action {action_index} must be an object")
+            for field in ("key", "label", "tone", "icon"):
+                if field not in action:
+                    raise ValueError(f"highlight {index} action {action_index} missing required field: {field}")
 
 
 def normalize_manifest(
@@ -89,26 +141,46 @@ def normalize_manifest(
 ) -> HighlightManifest:
     normalized: list[HighlightPoint] = []
     previous_end_ms = -1
+    rejection_reasons: list[str] = []
+
+    def reject(reason: str) -> None:
+        rejection_reasons.append(reason)
 
     for candidate in sorted(manifest.highlights, key=lambda item: item.start_ms):
         if len(normalized) >= MAX_HIGHLIGHTS:
             break
         if candidate.start_ms < 0 or candidate.end_ms <= candidate.start_ms:
+            reject(f"{candidate.id}: invalid highlight time window")
             continue
         window_ms = candidate.end_ms - candidate.start_ms
         if window_ms < MIN_WINDOW_MS or window_ms > MAX_WINDOW_MS:
+            reject(f"{candidate.id}: highlight time window must be 2-8 seconds")
             continue
         if duration_ms > 0 and candidate.end_ms > duration_ms:
+            reject(f"{candidate.id}: highlight time window exceeds episode duration")
             continue
         if candidate.start_ms < previous_end_ms:
+            reject(f"{candidate.id}: highlight time windows overlap")
+            continue
+        if candidate.type not in ALLOWED_HIGHLIGHT_TYPES:
+            reject(f"{candidate.id}: highlight type is not allowlisted")
             continue
         if candidate.template not in ALLOWED_TEMPLATES:
+            reject(f"{candidate.id}: component template is not allowlisted")
             continue
-        if candidate.payload.effect not in ALLOWED_EFFECTS:
+        if candidate.payload.effect is None or candidate.payload.effect not in ALLOWED_EFFECTS:
+            reject(f"{candidate.id}: interaction effect is not allowlisted")
+            continue
+        if not is_usable_title_copy(candidate.payload.title, max_chars=MAX_TITLE_CHARS):
+            reject(f"{candidate.id}: title must be concise Chinese title copy")
             continue
 
         actions = normalize_actions(candidate.payload.actions)
         if not actions:
+            reject(f"{candidate.id}: no usable interaction options")
+            continue
+        if candidate.template in {"dual-button", "poll"} and len(actions) < MIN_MULTI_ACTION_TEMPLATE_ACTIONS:
+            reject(f"{candidate.id}: {candidate.template} requires at least 2 interaction options")
             continue
 
         normalized.append(
@@ -120,7 +192,7 @@ def normalize_manifest(
                 intensity=max(0.0, min(candidate.intensity, 1.0)),
                 template=candidate.template,
                 payload=HighlightPayload(
-                    title=candidate.payload.title[:24],
+                    title=candidate.payload.title.strip(),
                     actions=actions,
                     effect=candidate.payload.effect,
                 ),
@@ -129,7 +201,8 @@ def normalize_manifest(
         previous_end_ms = candidate.end_ms
 
     if not normalized:
-        raise ValueError("Manifest contains no valid highlight points")
+        details = "; ".join(rejection_reasons[:8]) or "all highlights failed validation rules"
+        raise ValueError(f"Manifest contains no valid highlight points: {details}")
 
     return HighlightManifest(
         content_id=content_id,
@@ -159,13 +232,20 @@ def normalize_actions(actions: list[HighlightAction]) -> list[HighlightAction]:
 
     for action in actions[:3]:
         key = re.sub(r"[^a-zA-Z0-9_-]", "", action.key)[:32]
-        label = action.label.strip()[:10]
+        label = action.label.strip()
         if not key or not label or key in used_keys:
             continue
+        if not is_usable_interaction_copy(label, max_chars=MAX_ACTION_LABEL_CHARS):
+            continue
+        if (
+            action.tone is None
+            or action.icon is None
+            or action.tone not in ALLOWED_ACTION_TONES
+            or action.icon not in ALLOWED_ACTION_ICONS
+        ):
+            continue
         used_keys.add(key)
-        tone = action.tone if action.tone in ALLOWED_ACTION_TONES else None
-        icon = action.icon if action.icon in ALLOWED_ACTION_ICONS else None
-        normalized.append(HighlightAction(key=key, label=label, tone=tone, icon=icon))
+        normalized.append(HighlightAction(key=key, label=label, tone=action.tone, icon=action.icon))
 
     return normalized
 

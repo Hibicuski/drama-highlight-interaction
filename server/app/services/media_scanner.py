@@ -10,10 +10,7 @@ from urllib.parse import quote
 from app.db.models import (
     Drama,
     Episode,
-    HighlightAction,
     HighlightManifest,
-    HighlightPayload,
-    HighlightPoint,
 )
 from app.services.manifest_store import content_id_from_relative_path, load_manifest
 
@@ -96,7 +93,7 @@ def scan_local_dramas(local_drama_root: Path, public_base_url: str) -> tuple[lis
                     duration_ms=duration_ms,
                 )
             )
-            manifests[content_id] = load_manifest(content_id, duration_ms) or default_manifest(content_id)
+            manifests[content_id] = load_manifest(content_id, duration_ms) or empty_manifest(content_id)
 
     return dramas, episodes, manifests
 
@@ -199,41 +196,9 @@ def video_duration_ms(video_path: Path) -> int:
         return 0
 
 
-def default_manifest(content_id: str) -> HighlightManifest:
+def empty_manifest(content_id: str) -> HighlightManifest:
     return HighlightManifest(
         content_id=content_id,
-        highlights=[
-            HighlightPoint(
-                id=f"hl-{content_id}-001",
-                start_ms=12000,
-                end_ms=18000,
-                type="satisfying",
-                intensity=0.9,
-                template="dual-button",
-                payload=HighlightPayload(
-                    title="爽点来了",
-                    actions=[
-                        HighlightAction(key="satisfying", label="爽了"),
-                        HighlightAction(key="more", label="继续狠一点"),
-                    ],
-                    effect="particle-burst",
-                ),
-            ),
-            HighlightPoint(
-                id=f"hl-{content_id}-002",
-                start_ms=45000,
-                end_ms=52000,
-                type="twist",
-                intensity=0.85,
-                template="dual-button",
-                payload=HighlightPayload(
-                    title="这波反转你怎么看？",
-                    actions=[
-                        HighlightAction(key="expected", label="意料之中"),
-                        HighlightAction(key="surprised", label="没想到"),
-                    ],
-                    effect="ratio-reveal",
-                ),
-            ),
-        ],
+        version="0.2.0",
+        highlights=[],
     )
