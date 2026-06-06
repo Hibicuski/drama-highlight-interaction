@@ -4,14 +4,11 @@ import android.os.Bundle;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.IntentCompat;
 import androidx.media3.ui.PlayerView;
 
 import com.warren.shortdrama.R;
 import com.warren.shortdrama.core.interaction.InteractionRepository;
 import com.warren.shortdrama.core.interaction.InteractionScheduler;
-import com.warren.shortdrama.core.model.Drama;
-import com.warren.shortdrama.core.model.Episode;
 import com.warren.shortdrama.core.model.HighlightManifest;
 import com.warren.shortdrama.core.model.HighlightPoint;
 import com.warren.shortdrama.core.model.InteractionModels;
@@ -40,19 +37,24 @@ public class EpisodePlayerActivity extends AppCompatActivity {
         PlayerView playerView = findViewById(R.id.player_view);
         tvTitle = findViewById(R.id.tv_player_drama_title);
 
-        Drama drama = IntentCompat.getSerializableExtra(getIntent(), getString(R.string.extra_drama), Drama.class);
-        Episode episode = IntentCompat.getSerializableExtra(getIntent(), getString(R.string.extra_episode), Episode.class);
-        if (drama != null) {
-            String episodeTitle = episode == null ? getString(R.string.player_default_episode_title) : episode.getTitle();
-            tvTitle.setText(getString(R.string.player_title_format, drama.getTitle(), episodeTitle));
+        String dramaTitle = getIntent().getStringExtra(getString(R.string.extra_drama_title));
+        String episodeTitle = getIntent().getStringExtra(getString(R.string.extra_episode_title));
+        if (episodeTitle == null || episodeTitle.isEmpty()) {
+            episodeTitle = getString(R.string.player_default_episode_title);
+        }
+        if (dramaTitle != null && !dramaTitle.isEmpty()) {
+            tvTitle.setText(getString(R.string.player_title_format, dramaTitle, episodeTitle));
+        } else {
+            tvTitle.setText(episodeTitle);
         }
 
-        String videoUrl = episode == null ? "" : episode.getVideoUrl();
+        String videoUrl = getIntent().getStringExtra(getString(R.string.extra_episode_video_url));
         dramaPlayer = new DramaPlayer(this, playerView, videoUrl);
 
-        if (episode != null) {
-            currentContentId = episode.getContentId();
-            fetchManifest(episode.getContentId());
+        String contentId = getIntent().getStringExtra(getString(R.string.extra_episode_content_id));
+        if (contentId != null && !contentId.isEmpty()) {
+            currentContentId = contentId;
+            fetchManifest(contentId);
         } else {
             allowPlayback();
         }

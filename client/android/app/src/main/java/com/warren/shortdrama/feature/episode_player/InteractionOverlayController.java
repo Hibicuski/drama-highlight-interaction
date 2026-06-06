@@ -328,11 +328,7 @@ public class InteractionOverlayController {
     }
 
     private String buildActionText(HighlightPoint.Action action) {
-        String icon = iconText(action.getIcon());
-        if (icon.isEmpty()) {
-            return action.getLabel();
-        }
-        return icon + resources.getString(R.string.interaction_action_icon_separator) + action.getLabel();
+        return action.getLabel();
     }
 
     private int actionColor(HighlightPoint.Action action, int index) {

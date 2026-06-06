@@ -7,12 +7,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.IntentCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.warren.shortdrama.R;
-import com.warren.shortdrama.core.model.Drama;
 import com.warren.shortdrama.core.model.Episode;
 import com.warren.shortdrama.core.network.RetrofitClient;
 import com.warren.shortdrama.feature.episode_player.EpisodePlayerActivity;
@@ -25,7 +23,8 @@ import retrofit2.Response;
 
 public class EpisodeListActivity extends AppCompatActivity {
 
-    private Drama drama;
+    private int dramaId;
+    private String dramaTitle;
     private RecyclerView rvEpisodeList;
     private TextView tvStatus;
     private EpisodeAdapter adapter;
@@ -36,16 +35,18 @@ public class EpisodeListActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_episode_list);
 
-        drama = IntentCompat.getSerializableExtra(getIntent(), getString(R.string.extra_drama), Drama.class);
-        if (drama == null) {
+        dramaId = getIntent().getIntExtra(getString(R.string.extra_drama_id), -1);
+        dramaTitle = getIntent().getStringExtra(getString(R.string.extra_drama_title));
+        String dramaDescription = getIntent().getStringExtra(getString(R.string.extra_drama_description));
+        if (dramaId < 0) {
             finish();
             return;
         }
 
         TextView tvTitle = findViewById(R.id.tv_drama_title_header);
         TextView tvDesc = findViewById(R.id.tv_drama_description);
-        tvTitle.setText(drama.getTitle());
-        tvDesc.setText(drama.getDescription());
+        tvTitle.setText(dramaTitle == null ? "" : dramaTitle);
+        tvDesc.setText(dramaDescription == null ? "" : dramaDescription);
 
         rvEpisodeList = findViewById(R.id.rv_episode_list);
         tvStatus = findViewById(R.id.tv_status);
@@ -61,7 +62,7 @@ public class EpisodeListActivity extends AppCompatActivity {
         tvStatus.setVisibility(View.VISIBLE);
         tvStatus.setText(R.string.status_loading_episodes);
         if (episodesCall != null) episodesCall.cancel();
-        episodesCall = RetrofitClient.api(this).getEpisodes(drama.getId());
+        episodesCall = RetrofitClient.api(this).getEpisodes(dramaId);
         episodesCall.enqueue(new Callback<List<Episode>>() {
             @Override
             public void onResponse(Call<List<Episode>> call, Response<List<Episode>> response) {
@@ -85,8 +86,10 @@ public class EpisodeListActivity extends AppCompatActivity {
 
     private void openPlayer(Episode episode) {
         Intent intent = new Intent(this, EpisodePlayerActivity.class);
-        intent.putExtra(getString(R.string.extra_drama), drama);
-        intent.putExtra(getString(R.string.extra_episode), episode);
+        intent.putExtra(getString(R.string.extra_drama_title), dramaTitle);
+        intent.putExtra(getString(R.string.extra_episode_content_id), episode.getContentId());
+        intent.putExtra(getString(R.string.extra_episode_title), episode.getTitle());
+        intent.putExtra(getString(R.string.extra_episode_video_url), episode.getVideoUrl());
         startActivity(intent);
     }
 

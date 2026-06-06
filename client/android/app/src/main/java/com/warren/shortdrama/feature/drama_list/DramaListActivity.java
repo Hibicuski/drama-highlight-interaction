@@ -70,7 +70,9 @@ public class DramaListActivity extends AppCompatActivity {
 
     private void openDrama(Drama drama) {
         Intent intent = new Intent(DramaListActivity.this, EpisodeListActivity.class);
-        intent.putExtra(getString(R.string.extra_drama), drama);
+        intent.putExtra(getString(R.string.extra_drama_id), drama.getId());
+        intent.putExtra(getString(R.string.extra_drama_title), drama.getTitle());
+        intent.putExtra(getString(R.string.extra_drama_description), drama.getDescription());
         startActivity(intent);
     }
 

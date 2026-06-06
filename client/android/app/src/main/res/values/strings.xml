@@ -14,6 +14,12 @@
     <string name="config_fallback_video_url" translatable="false">https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4</string>
     <string name="extra_drama" translatable="false">drama</string>
     <string name="extra_episode" translatable="false">episode</string>
+    <string name="extra_drama_id" translatable="false">drama_id</string>
+    <string name="extra_drama_title" translatable="false">drama_title</string>
+    <string name="extra_drama_description" translatable="false">drama_description</string>
+    <string name="extra_episode_content_id" translatable="false">episode_content_id</string>
+    <string name="extra_episode_title" translatable="false">episode_title</string>
+    <string name="extra_episode_video_url" translatable="false">episode_video_url</string>
 
     <string name="player_default_episode_title">Episode 1</string>
     <string name="player_title_format">%1$s - %2$s</string>
