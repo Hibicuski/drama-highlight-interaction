@@ -128,21 +128,6 @@
     </com.google.android.material.card.MaterialCardView>
 
     <TextView
-        android:id="@+id/tv_interaction_feedback"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:shadowColor="@color/shadow_soft"
-        android:shadowDx="4"
-        android:shadowDy="4"
-        android:shadowRadius="8"
-        tools:text="@string/interaction_feedback_simple"
-        android:textColor="@color/interaction_feedback_text"
-        android:textSize="@dimen/text_feedback"
-        android:textStyle="bold"
-        android:visibility="gone" />
-
-    <TextView
         android:id="@+id/tv_player_drama_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

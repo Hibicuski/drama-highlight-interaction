@@ -106,7 +106,7 @@ public class EpisodePlayerActivity extends AppCompatActivity {
         interactionRepository.reportInteraction(currentContentId, highlightId, actionKey, new InteractionRepository.ReportCallback() {
             @Override
             public void onSuccess(InteractionModels.InteractionResponse stats) {
-                overlayController.showFeedback(actionLabel, stats);
+                overlayController.showFeedback(actionKey, stats);
             }
 
             @Override

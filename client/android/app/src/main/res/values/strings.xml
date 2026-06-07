@@ -1,4 +1,4 @@
-<resources>
+﻿<resources>
     <string name="app_name">Drama Highlight</string>
     <string name="short_dramas">Short Dramas</string>
     <string name="status_loading_dramas">Loading dramas from backend...</string>
@@ -32,11 +32,10 @@
     <string name="interaction_badge_slap_face">高能打脸</string>
     <string name="interaction_badge_funny">轻松名场面</string>
     <string name="interaction_badge_default">高光互动</string>
-    <string name="interaction_feedback_selected_format">已选: %1$s</string>
     <string name="interaction_feedback_simple">感谢参与！</string>
     <string name="interaction_stats_received">已收到你的互动</string>
     <string name="interaction_stats_poll_format">投票已记录 · %1$s · 共 %2$d 人</string>
-    <string name="interaction_stats_boost_format">已助力成功 · 当前 %1$d 次打call</string>
+    <string name="interaction_stats_boost_format">已助力成功 · 当前 %1$d 次打 call</string>
     <string name="interaction_stats_default_format">已有 %1$d 人参与互动</string>
     <string name="interaction_stats_no_ratio">暂无占比</string>
     <string name="interaction_stats_top_action_format">%1$s 领先 %2$d%%</string>

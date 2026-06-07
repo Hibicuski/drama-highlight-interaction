@@ -3,14 +3,8 @@
     <integer name="interaction_scheduler_tick_ms">500</integer>
     <integer name="interaction_overlay_show_ms">500</integer>
     <integer name="interaction_overlay_hide_ms">400</integer>
-    <integer name="interaction_feedback_show_ms">400</integer>
-    <integer name="interaction_feedback_hide_delay_ms">1000</integer>
-    <integer name="interaction_feedback_hide_ms">500</integer>
     <integer name="interaction_stats_fade_ms">500</integer>
-    <integer name="interaction_auto_hide_delay_ms">2500</integer>
-    <integer name="interaction_simple_feedback_show_ms">300</integer>
-    <integer name="interaction_simple_feedback_hide_ms">300</integer>
-    <integer name="interaction_simple_feedback_delay_ms">1000</integer>
+    <integer name="interaction_auto_hide_delay_ms">4500</integer>
     <integer name="interaction_button_press_ms">100</integer>
     <integer name="interaction_pulse_ms">800</integer>
 </resources>
