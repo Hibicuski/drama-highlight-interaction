@@ -12,6 +12,7 @@ from openai import BadRequestError
 EMPTY_ROOT = Path(tempfile.gettempdir()) / "drama-highlight-interaction-tests-empty"
 EMPTY_ROOT.mkdir(exist_ok=True)
 os.environ["LOCAL_DRAMA_ROOT"] = str(EMPTY_ROOT)
+os.environ["STORE_BACKEND"] = "memory"
 
 from app.db.models import HighlightAction, HighlightManifest, HighlightPayload, HighlightPoint, InteractionRequest
 from app.db.session import InMemoryStore

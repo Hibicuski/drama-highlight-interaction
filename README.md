@@ -40,7 +40,13 @@ http://10.0.2.2:3000/api/
 
 ## FastAPI 后端
 
-后端启动时扫描仓库同级的 `drama` 文件夹。安装 FFmpeg 后，服务会通过 `ffprobe` 读取每集真实时长：
+后端默认使用 PostgreSQL 持久化短剧、剧集、高光点、互动事件和聚合快照。先启动本地数据库：
+
+```powershell
+docker compose up -d postgres
+```
+
+后端启动时扫描仓库同级的 `drama` 文件夹，同步元数据和高光点到 PostgreSQL。安装 FFmpeg 后，服务会通过 `ffprobe` 读取每集真实时长：
 
 ```powershell
 cd server
@@ -64,6 +70,8 @@ Android 客户端依赖以下 REST API：
 - `GET /api/highlights/{id}/aggregate`
 
 剧集数据中的 `content_id` 是由视频相对路径 hash 得到的稳定内容 ID。`Episode.id` 仍可能存在，但只作为当前扫描结果里的运行时数字 ID，不再用于 Manifest 文件名、Manifest 查询或互动上报。
+
+互动上报会写入 `interaction_event`，并同步更新 `aggregate_snapshot`。因此服务重启后，已经产生的互动人数和动作分布不会丢失。
 
 ## 文档
 

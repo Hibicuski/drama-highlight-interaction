@@ -55,6 +55,7 @@ class InteractionRequest(BaseModel):
     content_id: str
     highlight_id: str
     action: str
+    session_id: str | None = None
 
 
 class InteractionResponse(BaseModel):

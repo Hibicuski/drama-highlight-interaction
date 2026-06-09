@@ -1,10 +1,11 @@
 # Drama FastAPI Server
 
-短剧高光互动 Demo 的 Python + FastAPI 后端。当前使用内存存储，启动时扫描本地短剧文件夹，并优先加载已经离线生成好的高光互动 Manifest。
+短剧高光互动 Demo 的 Python + FastAPI 后端。当前默认使用 PostgreSQL 持久化，启动时扫描本地短剧文件夹，并优先加载已经离线生成好的高光互动 Manifest。
 
 ## 前置环境
 
 - Python 3.11 或更高版本
+- PostgreSQL 16，推荐直接用仓库根目录的 `docker-compose.yml`
 - FFmpeg，其中需要用到 `ffmpeg` 和 `ffprobe`
 
 先确认 `ffprobe` 已经可以执行：
@@ -23,6 +24,24 @@ $env:FFPROBE_PATH="C:\path\to\ffprobe.exe"
 没有安装或配置 `ffprobe` 时，服务仍可启动，但剧集接口中的 `duration_ms` 会返回 `0`。
 
 ## 启动
+
+先在仓库根目录启动 PostgreSQL：
+
+```powershell
+docker compose up -d postgres
+```
+
+默认数据库连接地址为：
+
+```text
+postgresql+psycopg://drama:drama_dev@localhost:5432/drama_highlight
+```
+
+如需改为自己的 PostgreSQL，设置环境变量：
+
+```powershell
+$env:DATABASE_URL="postgresql+psycopg://user:password@localhost:5432/db_name"
+```
 
 ```powershell
 cd server
@@ -96,7 +115,15 @@ Android 客户端中的 `RetrofitClient.BASE_URL` 也需要改为相同局域网
 - `POST /api/interactions`
 - `GET /api/highlights/{id}/aggregate`
 
-互动数据目前保存在内存中，服务重启后会清空。`db/schema.sql` 是下一阶段接入真实数据库时使用的结构草案。
+互动数据会写入 PostgreSQL：`interaction_event` 保存每次点击事件，`aggregate_snapshot` 保存每个高光点下各动作的聚合计数。服务重启后，聚合结果不会清空。
+
+`db/schema.sql` 是当前 PostgreSQL 表结构说明；实际运行时由 SQLAlchemy 在启动时自动建表。
+
+测试或临时本地 fallback 可以显式使用内存存储：
+
+```powershell
+$env:STORE_BACKEND="memory"
+```
 
 以下 AI 接口已经预留：
 
