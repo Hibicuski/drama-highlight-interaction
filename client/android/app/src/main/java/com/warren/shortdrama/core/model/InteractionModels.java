@@ -15,10 +15,14 @@ public class InteractionModels {
         @SerializedName("action")
         private String action;
 
-        public InteractionRequest(String contentId, String highlightId, String action) {
+        @SerializedName("session_id")
+        private String sessionId;
+
+        public InteractionRequest(String contentId, String highlightId, String action, String sessionId) {
             this.contentId = contentId;
             this.highlightId = highlightId;
             this.action = action;
+            this.sessionId = sessionId;
         }
     }
 

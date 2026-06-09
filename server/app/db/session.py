@@ -107,6 +107,7 @@ class DatabaseStore:
         self.engine = create_engine(self.database_url, pool_pre_ping=True)
         self.session_factory = sessionmaker(self.engine, expire_on_commit=False)
         Base.metadata.create_all(self.engine)
+        self._apply_lightweight_migrations()
         self.reload()
 
     def reload(self) -> None:
@@ -210,6 +211,7 @@ class DatabaseStore:
             session.add(
                 InteractionEventRow(
                     session_id=request.session_id,
+                    user_id=request.user_id,
                     content_id=request.content_id,
                     highlight_id=request.highlight_id,
                     action=request.action,
@@ -235,6 +237,30 @@ class DatabaseStore:
             ).all()
             actions = {row.action: row.counter for row in rows}
             return InteractionResponse(count=sum(actions.values()), actions=actions)
+
+    def _apply_lightweight_migrations(self) -> None:
+        from sqlalchemy import text
+
+        statements = [
+            "ALTER TABLE interaction_event ADD COLUMN IF NOT EXISTS user_id TEXT",
+            """
+            UPDATE interaction_event
+            SET session_id = 'legacy_unknown'
+            WHERE session_id IS NULL OR btrim(session_id) = ''
+            """,
+            "ALTER TABLE interaction_event ALTER COLUMN session_id SET NOT NULL",
+            "ALTER TABLE aggregate_snapshot ALTER COLUMN counter TYPE BIGINT",
+            "ALTER TABLE branch_session ADD COLUMN IF NOT EXISTS user_id TEXT",
+            """
+            UPDATE branch_session
+            SET session_id = 'legacy_unknown'
+            WHERE session_id IS NULL OR btrim(session_id) = ''
+            """,
+            "ALTER TABLE branch_session ALTER COLUMN session_id SET NOT NULL",
+        ]
+        with self.engine.begin() as connection:
+            for statement in statements:
+                connection.execute(text(statement))
 
     def _upsert_manifest(self, session, manifest: HighlightManifest) -> None:
         from sqlalchemy import delete, select

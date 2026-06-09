@@ -32,7 +32,8 @@ CREATE TABLE highlight_point (
 
 CREATE TABLE interaction_event (
     id BIGSERIAL PRIMARY KEY,
-    session_id TEXT,
+    session_id TEXT NOT NULL,
+    user_id TEXT,
     content_id TEXT NOT NULL,
     highlight_id TEXT NOT NULL,
     action TEXT NOT NULL,
@@ -45,7 +46,7 @@ CREATE TABLE aggregate_snapshot (
     highlight_id TEXT NOT NULL,
     action TEXT NOT NULL,
     content_id TEXT NOT NULL,
-    counter INTEGER NOT NULL DEFAULT 0,
+    counter BIGINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (highlight_id, action),
     FOREIGN KEY (content_id) REFERENCES episode(content_id),
@@ -54,7 +55,8 @@ CREATE TABLE aggregate_snapshot (
 
 CREATE TABLE branch_session (
     id BIGSERIAL PRIMARY KEY,
-    session_id TEXT,
+    session_id TEXT NOT NULL,
+    user_id TEXT,
     content_id TEXT NOT NULL,
     prompt TEXT NOT NULL DEFAULT '',
     result JSONB,

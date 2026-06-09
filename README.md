@@ -71,7 +71,7 @@ Android 客户端依赖以下 REST API：
 
 剧集数据中的 `content_id` 是由视频相对路径 hash 得到的稳定内容 ID。`Episode.id` 仍可能存在，但只作为当前扫描结果里的运行时数字 ID，不再用于 Manifest 文件名、Manifest 查询或互动上报。
 
-互动上报会写入 `interaction_event`，并同步更新 `aggregate_snapshot`。因此服务重启后，已经产生的互动人数和动作分布不会丢失。
+互动上报必须包含客户端本地持久化的 `session_id`，Android 会在首次使用时生成 `device_` 前缀的 UUID。服务端会写入 `interaction_event`，并同步更新 `aggregate_snapshot`。因此服务重启后，已经产生的互动人数和动作分布不会丢失。后续接用户系统时，可在同一事件表补充可空的 `user_id`。
 
 ## 文档
 

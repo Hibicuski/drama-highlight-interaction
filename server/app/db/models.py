@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Drama(BaseModel):
@@ -55,7 +55,16 @@ class InteractionRequest(BaseModel):
     content_id: str
     highlight_id: str
     action: str
-    session_id: str | None = None
+    session_id: str
+    user_id: str | None = None
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("session_id is required")
+        return value
 
 
 class InteractionResponse(BaseModel):

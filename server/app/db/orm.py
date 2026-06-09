@@ -59,7 +59,8 @@ class InteractionEventRow(Base):
     __tablename__ = "interaction_event"
 
     id: Mapped[int] = mapped_column(BIGINT, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(Text, nullable=True)
+    session_id: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[str] = mapped_column(Text, nullable=True)
     content_id: Mapped[str] = mapped_column(ForeignKey("episode.content_id"), nullable=False, index=True)
     highlight_id: Mapped[str] = mapped_column(ForeignKey("highlight_point.id"), nullable=False, index=True)
     action: Mapped[str] = mapped_column(Text, nullable=False)
@@ -76,11 +77,12 @@ class AggregateSnapshotRow(Base):
     highlight_id: Mapped[str] = mapped_column(ForeignKey("highlight_point.id"), primary_key=True)
     action: Mapped[str] = mapped_column(Text, primary_key=True)
     content_id: Mapped[str] = mapped_column(ForeignKey("episode.content_id"), nullable=False, index=True)
-    counter: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    counter: Mapped[int] = mapped_column(BIGINT, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
+        onupdate=func.now(),
     )
 
 
@@ -88,7 +90,8 @@ class BranchSessionRow(Base):
     __tablename__ = "branch_session"
 
     id: Mapped[int] = mapped_column(BIGINT, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(Text, nullable=True)
+    session_id: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[str] = mapped_column(Text, nullable=True)
     content_id: Mapped[str] = mapped_column(ForeignKey("episode.content_id"), nullable=False, index=True)
     prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
     result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=True)
@@ -102,4 +105,5 @@ class BranchSessionRow(Base):
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
+        onupdate=func.now(),
     )

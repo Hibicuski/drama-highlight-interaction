@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 from openai import BadRequestError
+from pydantic import ValidationError
 
 EMPTY_ROOT = Path(tempfile.gettempdir()) / "drama-highlight-interaction-tests-empty"
 EMPTY_ROOT.mkdir(exist_ok=True)
@@ -203,6 +204,22 @@ class MediaScannerTests(unittest.TestCase):
 
 
 class InteractionStoreTests(unittest.TestCase):
+    def test_interaction_request_requires_session_id(self) -> None:
+        with self.assertRaises(ValidationError):
+            InteractionRequest(
+                content_id="content",
+                highlight_id="highlight",
+                action="tap",
+            )
+
+        with self.assertRaises(ValidationError):
+            InteractionRequest(
+                content_id="content",
+                highlight_id="highlight",
+                action="tap",
+                session_id=" ",
+            )
+
     def test_counts_interactions_without_mutating_previous_response(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -246,6 +263,7 @@ class InteractionStoreTests(unittest.TestCase):
                 content_id=content_id,
                 highlight_id=highlight_id,
                 action="shuang",
+                session_id="device_test_session",
             )
             first_response = store.report_interaction(request)
 

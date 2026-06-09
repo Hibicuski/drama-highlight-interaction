@@ -115,7 +115,7 @@ Android 客户端中的 `RetrofitClient.BASE_URL` 也需要改为相同局域网
 - `POST /api/interactions`
 - `GET /api/highlights/{id}/aggregate`
 
-互动数据会写入 PostgreSQL：`interaction_event` 保存每次点击事件，`aggregate_snapshot` 保存每个高光点下各动作的聚合计数。服务重启后，聚合结果不会清空。
+互动上报必须传入 `session_id`。Android 客户端会在本地生成并持久化一个 `device_` 前缀 UUID，每次 `POST /api/interactions` 都随请求体上报。互动数据会写入 PostgreSQL：`interaction_event` 保存每次点击事件，并预留可空 `user_id` 供后续用户系统使用；`aggregate_snapshot` 保存每个高光点下各动作的聚合计数。服务重启后，聚合结果不会清空。
 
 `db/schema.sql` 是当前 PostgreSQL 表结构说明；实际运行时由 SQLAlchemy 在启动时自动建表。
 
