@@ -40,7 +40,7 @@
 .
 ├── client/android/     # Android Studio 工程（客户端）
 ├── server/             # FastAPI 服务端、媒体扫描、AI 高光生成、接口测试
-├── docs/               # 项目排期与分支管理
+├── docs/               # 项目排期
 ├── assets/             # Manifest 示例资源
 └── docker-compose.yml  # 本地 PostgreSQL
 ```
@@ -100,4 +100,3 @@ uvicorn app.main:app --host 0.0.0.0 --port 3000
 - [服务端技术说明](server/README.md) — 架构、配置、Manifest 离线生成、API 参考
 - [Android 客户端技术说明](client/android/README.md) — 模块结构、播放与互动时序、网络层
 - [项目拆解与排期](docs/project-plan.md)
-- [分支管理](docs/branching.md)
