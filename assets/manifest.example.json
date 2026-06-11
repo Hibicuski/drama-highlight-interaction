@@ -1,19 +1,19 @@
 {
-  "episode_id": 101,
-  "version": "0.1.0",
+  "content_id": "example-content",
+  "version": "0.2.0",
   "highlights": [
     {
       "id": "hl-001",
       "start_ms": 12000,
       "end_ms": 18000,
-      "type": "revenge",
+      "type": "satisfying",
       "intensity": 0.92,
       "template": "dual-button",
       "payload": {
-        "title": "爽点来袭",
+        "title": "霸气回怼",
         "actions": [
-          { "key": "satisfying", "label": "爽了" },
-          { "key": "more", "label": "继续狠狠干" }
+          { "key": "shuang", "label": "爽", "tone": "positive", "icon": "fire" },
+          { "key": "more", "label": "上头", "tone": "support", "icon": "boost" }
         ],
         "effect": "particle-burst"
       }
@@ -26,12 +26,27 @@
       "intensity": 0.85,
       "template": "poll",
       "payload": {
-        "title": "你猜到反转了吗",
+        "title": "身份曝光",
         "actions": [
-          { "key": "guessed", "label": "我猜到了" },
-          { "key": "surprised", "label": "居然反转" }
+          { "key": "guessed", "label": "猜到了", "tone": "calm", "icon": "check" },
+          { "key": "shocked", "label": "看懵了", "tone": "shocked", "icon": "shock" }
         ],
         "effect": "ratio-reveal"
+      }
+    },
+    {
+      "id": "hl-003",
+      "start_ms": 72000,
+      "end_ms": 77000,
+      "type": "funny",
+      "intensity": 0.8,
+      "template": "tap-boost",
+      "payload": {
+        "title": "童言破防",
+        "actions": [
+          { "key": "laughed", "label": "笑出鹅叫", "tone": "funny", "icon": "laugh" }
+        ],
+        "effect": "pulse"
       }
     }
   ]

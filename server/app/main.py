@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import mimetypes
+from base64 import b64decode
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from app.api import ai, dramas, interactions, manifests
 from app.db.session import get_store
-from app.services.media_scanner import POSTER_EXTENSIONS, VIDEO_EXTENSIONS
+from app.services.media_scanner import DEFAULT_POSTER_FILE_NAME, POSTER_EXTENSIONS, VIDEO_EXTENSIONS
 
 app = FastAPI(title="Drama Highlight Interaction API")
+
+DEFAULT_POSTER_PNG = b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mM8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,7 +71,10 @@ def get_video(relative_path: str, request: Request) -> StreamingResponse:
 
 
 @app.get("/posters/{relative_path:path}")
-def get_poster(relative_path: str) -> FileResponse:
+def get_poster(relative_path: str) -> Response:
+    if relative_path == DEFAULT_POSTER_FILE_NAME:
+        return Response(content=DEFAULT_POSTER_PNG, media_type="image/png")
+
     store = get_store()
     poster_path = safe_media_path(store.local_drama_root, relative_path, POSTER_EXTENSIONS)
     return FileResponse(poster_path)

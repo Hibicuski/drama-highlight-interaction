@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#22000000" /> <!-- 黑色 13% 透明 -->
-    <corners android:radius="12dp" />
+    <solid android:color="@color/surface_scrim_13" />
+    <corners android:radius="@dimen/corner_m" />
     <padding
-        android:left="6dp"
-        android:top="4dp"
-        android:right="6dp"
-        android:bottom="4dp"/>
+        android:left="@dimen/spacing_m"
+        android:top="@dimen/spacing_s"
+        android:right="@dimen/spacing_m"
+        android:bottom="@dimen/spacing_s"/>
 </shape>

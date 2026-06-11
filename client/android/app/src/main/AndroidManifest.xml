@@ -11,7 +11,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.TiktokLiveDemo">
+        android:theme="@style/Theme.DramaHighlight">
         <activity
             android:name=".feature.drama_list.DramaListActivity"
             android:exported="true">

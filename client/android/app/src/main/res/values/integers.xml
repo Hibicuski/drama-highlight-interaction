@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <integer name="interaction_scheduler_tick_ms">500</integer>
+    <integer name="interaction_overlay_show_ms">500</integer>
+    <integer name="interaction_overlay_hide_ms">400</integer>
+    <integer name="interaction_stats_fade_ms">500</integer>
+    <integer name="interaction_auto_hide_delay_ms">4500</integer>
+    <integer name="interaction_button_press_ms">100</integer>
+    <integer name="interaction_pulse_ms">800</integer>
+</resources>

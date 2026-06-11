@@ -3,19 +3,35 @@ import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from openai import BadRequestError
+from pydantic import ValidationError
 
 EMPTY_ROOT = Path(tempfile.gettempdir()) / "drama-highlight-interaction-tests-empty"
 EMPTY_ROOT.mkdir(exist_ok=True)
 os.environ["LOCAL_DRAMA_ROOT"] = str(EMPTY_ROOT)
+os.environ["STORE_BACKEND"] = "memory"
 
-from app.db.models import InteractionRequest
+from app.db.models import HighlightAction, HighlightManifest, HighlightPayload, HighlightPoint, InteractionRequest
 from app.db.session import InMemoryStore
-from app.main import parse_range_header, safe_media_path, safe_video_path
-from app.services.media_scanner import POSTER_EXTENSIONS
+from app.main import get_poster, parse_range_header, safe_media_path, safe_video_path
+from app.services.episode_manifest_pipeline import extract_audio, format_timed_transcript, generate_episode_manifest
+from app.services.highlight_generator import generate_highlight_candidates
+from app.services.local_asr import pick_whisper_device
+from app.db.models import HighlightCandidateRequest
+from app.services.manifest_store import content_id_from_relative_path, load_manifest, parse_model_manifest, save_manifest
+from app.services.media_scanner import DEFAULT_POSTER_FILE_NAME, POSTER_EXTENSIONS
 from app.services.media_scanner import scan_local_dramas
+from app.services.model_client import (
+    AudioTranscriptionClient,
+    ModelClient,
+    extract_responses_output_text,
+    is_unsupported_json_mode_error,
+)
+from app.services.text_quality import repair_mojibake
 
 
 class RangeHeaderTests(unittest.TestCase):
@@ -69,42 +85,152 @@ class MediaScannerTests(unittest.TestCase):
     def test_scans_real_folder_and_maps_ffprobe_duration(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            drama_dir = root / "测试短剧"
+            drama_dir = root / "test-drama"
             drama_dir.mkdir()
-            (drama_dir / "第2集.mp4").write_bytes(b"video")
+            (drama_dir / "episode-1.mp4").write_bytes(b"video")
             (drama_dir / "poster.jpg").write_bytes(b"poster")
 
             with patch("app.services.media_scanner.subprocess.check_output", return_value="12.345\n"):
                 dramas, episodes, manifests = scan_local_dramas(root, "http://10.0.2.2:3000")
 
-            self.assertEqual(["测试短剧"], [drama.title for drama in dramas])
+            self.assertEqual(["test-drama"], [drama.title for drama in dramas])
             self.assertIn("/posters/", dramas[0].poster)
-            self.assertIn("%E6%B5%8B%E8%AF%95%E7%9F%AD%E5%89%A7", dramas[0].poster)
+            self.assertIn("test-drama", dramas[0].poster)
             self.assertEqual(12345, episodes[0].duration_ms)
-            self.assertIn("%E6%B5%8B%E8%AF%95%E7%9F%AD%E5%89%A7", episodes[0].video_url)
-            self.assertIn(episodes[0].id, manifests)
+            self.assertIn("test-drama", episodes[0].video_url)
+            self.assertIn(episodes[0].content_id, manifests)
+
+    def test_uses_episode_poster_and_falls_back_for_drama_poster(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            drama_dir = root / "posterless-drama"
+            drama_dir.mkdir()
+            (drama_dir / "episode-1.mp4").write_bytes(b"video")
+            (drama_dir / "episode-1.jpg").write_bytes(b"episode-poster")
+
+            with patch("app.services.media_scanner.subprocess.check_output", return_value="12\n"):
+                dramas, episodes, _ = scan_local_dramas(root, "http://10.0.2.2:3000")
+
+            self.assertIn("/posters/posterless-drama/episode-1.jpg", dramas[0].poster)
+            self.assertEqual(dramas[0].poster, episodes[0].poster)
+
+    def test_generates_episode_poster_when_image_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            drama_dir = root / "generated-poster-drama"
+            drama_dir.mkdir()
+            (drama_dir / "episode-1.mp4").write_bytes(b"video")
+
+            def fake_run(command, **kwargs):
+                Path(command[-1]).write_bytes(b"generated-poster")
+                return SimpleNamespace(returncode=0)
+
+            with (
+                patch("app.services.media_scanner.subprocess.check_output", return_value="12\n"),
+                patch("app.services.media_scanner.subprocess.run", side_effect=fake_run),
+            ):
+                dramas, episodes, _ = scan_local_dramas(root, "http://10.0.2.2:3000")
+
+            self.assertIn("/posters/.generated-posters/", episodes[0].poster)
+            self.assertTrue((root / ".generated-posters").exists())
+            self.assertEqual(episodes[0].poster, dramas[0].poster)
+
+    def test_uses_default_poster_when_episode_poster_cannot_be_generated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            drama_dir = root / "default-poster-drama"
+            drama_dir.mkdir()
+            (drama_dir / "episode-1.mp4").write_bytes(b"video")
+
+            with (
+                patch("app.services.media_scanner.subprocess.check_output", return_value="12\n"),
+                patch("app.services.media_scanner.subprocess.run", side_effect=OSError("ffmpeg missing")),
+            ):
+                dramas, episodes, _ = scan_local_dramas(root, "http://10.0.2.2:3000")
+
+            self.assertEqual(f"http://10.0.2.2:3000/posters/{DEFAULT_POSTER_FILE_NAME}", dramas[0].poster)
+            self.assertEqual(dramas[0].poster, episodes[0].poster)
+
+    def test_serves_builtin_default_poster(self) -> None:
+        response = get_poster(DEFAULT_POSTER_FILE_NAME)
+
+        self.assertEqual("image/png", response.media_type)
+        self.assertGreater(len(response.body), 0)
 
     def test_preserves_episode_numbers_from_file_names(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            drama_dir = root / "缺集短剧"
+            drama_dir = root / "missing-episodes"
             drama_dir.mkdir()
-            (drama_dir / "第4集.mp4").write_bytes(b"video")
-            (drama_dir / "第2集.mp4").write_bytes(b"video")
+            (drama_dir / "episode-2.mp4").write_bytes(b"video")
+            (drama_dir / "episode-4.mp4").write_bytes(b"video")
 
             with patch("app.services.media_scanner.subprocess.check_output", return_value="12\n"):
                 _, episodes, _ = scan_local_dramas(root, "http://10.0.2.2:3000")
 
             self.assertEqual([2, 4], [episode.episode_index for episode in episodes])
 
+    def test_loads_generated_manifest_instead_of_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, tempfile.TemporaryDirectory() as manifest_temp_dir:
+            root = Path(temp_dir)
+            drama_dir = root / "generated-highlight-drama"
+            drama_dir.mkdir()
+            (drama_dir / "episode-1.mp4").write_bytes(b"video")
+            manifest_root = Path(manifest_temp_dir)
+            content_id = content_id_from_relative_path("generated-highlight-drama/episode-1.mp4")
+            (manifest_root / f"{content_id}.json").write_text(
+                ManifestGenerationTests.MODEL_JSON,
+                encoding="utf-8",
+            )
+
+            with (
+                patch.dict(os.environ, {"MANIFEST_ROOT": str(manifest_root)}),
+                patch("app.services.media_scanner.subprocess.check_output", return_value="60\n"),
+            ):
+                _, episodes, manifests = scan_local_dramas(root, "http://10.0.2.2:3000")
+
+            self.assertEqual(f"hl-{episodes[0].content_id}-001", manifests[episodes[0].content_id].highlights[0].id)
+            self.assertTrue(manifests[episodes[0].content_id].highlights[0].payload.title)
+
+    def test_uses_empty_manifest_when_generated_manifest_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, tempfile.TemporaryDirectory() as manifest_temp_dir:
+            root = Path(temp_dir)
+            drama_dir = root / "no-generated-highlight-drama"
+            drama_dir.mkdir()
+            (drama_dir / "episode-1.mp4").write_bytes(b"video")
+
+            with (
+                patch.dict(os.environ, {"MANIFEST_ROOT": str(manifest_temp_dir)}),
+                patch("app.services.media_scanner.subprocess.check_output", return_value="60\n"),
+            ):
+                _, episodes, manifests = scan_local_dramas(root, "http://10.0.2.2:3000")
+
+            self.assertEqual([], manifests[episodes[0].content_id].highlights)
+
 
 class InteractionStoreTests(unittest.TestCase):
+    def test_interaction_request_requires_session_id(self) -> None:
+        with self.assertRaises(ValidationError):
+            InteractionRequest(
+                content_id="content",
+                highlight_id="highlight",
+                action="tap",
+            )
+
+        with self.assertRaises(ValidationError):
+            InteractionRequest(
+                content_id="content",
+                highlight_id="highlight",
+                action="tap",
+                session_id=" ",
+            )
+
     def test_counts_interactions_without_mutating_previous_response(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            drama_dir = root / "测试短剧"
+            drama_dir = root / "test-drama"
             drama_dir.mkdir()
-            (drama_dir / "第1集.mp4").write_bytes(b"video")
+            (drama_dir / "episode-1.mp4").write_bytes(b"video")
 
             with (
                 patch.dict(os.environ, {"LOCAL_DRAMA_ROOT": str(root)}),
@@ -112,10 +238,37 @@ class InteractionStoreTests(unittest.TestCase):
             ):
                 store = InMemoryStore()
 
+            content_id = store.episodes[0].content_id
+            highlight_id = f"hl-{content_id}-test"
+            store.set_manifest(
+                HighlightManifest(
+                    content_id=content_id,
+                    version="0.2.0",
+                    highlights=[
+                        HighlightPoint(
+                            id=highlight_id,
+                            start_ms=12000,
+                            end_ms=17000,
+                            type="satisfying",
+                            template="dual-button",
+                            payload=HighlightPayload(
+                                title="霸气回怼",
+                                actions=[
+                                    HighlightAction(key="shuang", label="爽", tone="positive", icon="fire"),
+                                    HighlightAction(key="shang-tou", label="上头", tone="positive", icon="boost"),
+                                ],
+                                effect="particle-burst",
+                            ),
+                        )
+                    ],
+                )
+            )
+
             request = InteractionRequest(
-                episode_id=1001001,
-                highlight_id="hl-1001001-001",
-                action="satisfying",
+                content_id=content_id,
+                highlight_id=highlight_id,
+                action="shuang",
+                session_id="device_test_session",
             )
             first_response = store.report_interaction(request)
 
@@ -126,5 +279,412 @@ class InteractionStoreTests(unittest.TestCase):
             self.assertEqual(20, store.get_aggregate(request.highlight_id).count)
 
 
+class ManifestGenerationTests(unittest.TestCase):
+    MODEL_JSON = """{
+      "content_id": "model-content",
+      "version": "0.2.0",
+      "highlights": [
+        {
+          "id": "model-id",
+          "start_ms": 12000,
+          "end_ms": 17000,
+          "type": "revenge",
+          "intensity": 1.3,
+          "template": "dual-button",
+          "payload": {
+            "title": "霸气回怼",
+            "actions": [
+              {"key": "satisfying", "label": "爽", "tone": "positive", "icon": "fire"},
+              {"key": "more", "label": "上头", "tone": "support", "icon": "boost"}
+            ],
+            "effect": "particle-burst"
+          }
+        }
+      ]
+    }"""
+
+    def test_normalizes_model_manifest_and_rebuilds_ids(self) -> None:
+        manifest = parse_model_manifest(f"```json\n{self.MODEL_JSON}\n```", "test-content", 60000)
+
+        self.assertEqual("test-content", manifest.content_id)
+        self.assertEqual("0.2.0", manifest.version)
+        self.assertEqual("hl-test-content-001", manifest.highlights[0].id)
+        self.assertEqual(1.0, manifest.highlights[0].intensity)
+        self.assertLessEqual(len(manifest.highlights[0].payload.title), 12)
+        self.assertEqual("positive", manifest.highlights[0].payload.actions[0].tone)
+        self.assertEqual("fire", manifest.highlights[0].payload.actions[0].icon)
+
+    def test_coerces_invalid_effect_to_default(self) -> None:
+        invalid_effect_json = self.MODEL_JSON.replace('"effect": "particle-burst"', '"effect": "rainbow-blast"')
+        manifest = parse_model_manifest(invalid_effect_json, "test-content", 60000)
+
+        self.assertEqual("pulse", manifest.highlights[0].payload.effect)
+
+    def test_accepts_clean_action_labels_outside_recommended_set(self) -> None:
+        json_text = self.MODEL_JSON.replace('"label": "爽"', '"label": "佩服"').replace(
+            '"label": "上头"', '"label": "硬刚"'
+        )
+        manifest = parse_model_manifest(json_text, "test-content", 60000)
+
+        labels = [action.label for action in manifest.highlights[0].payload.actions]
+        self.assertEqual(["佩服", "硬刚"], labels)
+
+    def test_rejects_english_action_label(self) -> None:
+        english_label_json = self.MODEL_JSON.replace('"label": "爽"', '"label": "cool"').replace(
+            '"label": "上头"', '"label": "wow"'
+        )
+        with self.assertRaises(ValueError):
+            parse_model_manifest(english_label_json, "test-content", 60000)
+
+    def test_rejects_unknown_action_tone_and_icon_when_no_option_remains(self) -> None:
+        invalid_style_json = self.MODEL_JSON.replace('"tone": "positive"', '"tone": "rainbow"').replace(
+            '"icon": "fire"',
+            '"icon": "unknown-icon"',
+        ).replace(
+            '"tone": "support"',
+            '"tone": "rainbow"',
+        ).replace(
+            '"icon": "boost"',
+            '"icon": "unknown-icon"',
+        )
+        with self.assertRaises(ValueError):
+            parse_model_manifest(invalid_style_json, "test-content", 60000)
+
+    def test_rejects_english_user_visible_copy(self) -> None:
+        english_json = self.MODEL_JSON.replace('"霸气回怼"', '"plot twist"')
+        with self.assertRaises(ValueError):
+            parse_model_manifest(english_json, "test-content", 60000)
+
+    def test_accepts_concise_chinese_plot_title(self) -> None:
+        plot_title_json = self.MODEL_JSON.replace('"霸气回怼"', '"身份曝光"')
+        manifest = parse_model_manifest(plot_title_json, "test-content", 60000)
+
+        self.assertEqual("身份曝光", manifest.highlights[0].payload.title)
+
+    def test_rejects_low_quality_title_terms(self) -> None:
+        low_quality_title_json = self.MODEL_JSON.replace('"霸气回怼"', '"放狠话打脸酸鸡"')
+        with self.assertRaises(ValueError):
+            parse_model_manifest(low_quality_title_json, "test-content", 60000)
+
+    def test_accepts_clear_operational_title(self) -> None:
+        clear_title_json = self.MODEL_JSON.replace('"霸气回怼"', '"当场认错"')
+        manifest = parse_model_manifest(clear_title_json, "test-content", 60000)
+
+        self.assertEqual("当场认错", manifest.highlights[0].payload.title)
+
+    def test_rejects_single_action_multi_action_template(self) -> None:
+        single_action_json = self.MODEL_JSON.replace(
+            ',\n              {"key": "more", "label": "上头", "tone": "support", "icon": "boost"}',
+            "",
+        )
+        with self.assertRaises(ValueError):
+            parse_model_manifest(single_action_json, "test-content", 60000)
+
+    def test_rejects_missing_required_manifest_fields(self) -> None:
+        missing_version_json = self.MODEL_JSON.replace('      "version": "0.2.0",\n', "")
+        with self.assertRaises(ValueError):
+            parse_model_manifest(missing_version_json, "test-content", 60000)
+
+    def test_repairs_common_chinese_mojibake(self) -> None:
+        self.assertEqual("哎快看，", repair_mojibake("鍝庡揩鐪嬶紝"))
+
+    def test_returns_empty_manifest_when_model_is_not_configured(self) -> None:
+        class UnconfiguredModelClient:
+            is_configured = False
+
+        manifest = generate_highlight_candidates(
+            HighlightCandidateRequest(
+                content_id="test-content",
+                transcript="[00:12.000 - 00:17.000] 这里反转了",
+                duration_ms=60000,
+            ),
+            model_client=UnconfiguredModelClient(),
+            fallback=False,
+        )
+
+        self.assertEqual("test-content", manifest.content_id)
+        self.assertEqual([], manifest.highlights)
+
+    def test_rejects_manifest_without_valid_highlights(self) -> None:
+        invalid_json = self.MODEL_JSON.replace('"end_ms": 17000', '"end_ms": 13001')
+        with self.assertRaises(ValueError):
+            parse_model_manifest(invalid_json, "test-content", 60000)
+
+    def test_saves_and_loads_generated_manifest(self) -> None:
+        manifest = parse_model_manifest(self.MODEL_JSON, "test-content", 60000)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            content_id = content_id_from_relative_path("test-drama/episode-1.mp4")
+            output_path = save_manifest(manifest, root, content_id=content_id)
+            loaded = load_manifest(content_id, 60000, root)
+
+        self.assertTrue(output_path.name.endswith(".json"))
+        self.assertEqual(f"{content_id}.json", output_path.name)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(f"hl-{content_id}-001", loaded.highlights[0].id)
+
+    def test_formats_timestamped_asr_segments(self) -> None:
+        transcript = {
+            "segments": [
+                {"start": 12.3, "end": 16.8, "speaker": "speaker_1", "text": "identity is fake"},
+            ]
+        }
+        self.assertEqual(
+            "[00:12.300 - 00:16.800] identity is fake",
+            format_timed_transcript(transcript),
+        )
+
+    def test_extract_audio_uses_tolerant_utf8_decoding_for_ffmpeg_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            video_path = root / "episode-1.mp4"
+            audio_path = root / "audio.mp3"
+            video_path.write_bytes(b"video")
+
+            with patch("app.services.episode_manifest_pipeline.subprocess.run") as run:
+                extract_audio(video_path, audio_path)
+
+            self.assertEqual("utf-8", run.call_args.kwargs["encoding"])
+            self.assertEqual("replace", run.call_args.kwargs["errors"])
+
+    def test_extracts_responses_output_text(self) -> None:
+        response = {
+            "output": [
+                {
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": '{"text":"identity is fake","segments":[]}',
+                        }
+                    ]
+                }
+            ]
+        }
+        self.assertEqual(
+            '{"text":"identity is fake","segments":[]}',
+            extract_responses_output_text(response),
+        )
+
+    def test_audio_transcription_client_dispatches_local_asr_engine(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            audio_path = Path(temp_dir) / "audio.wav"
+            audio_path.write_bytes(b"audio")
+
+            with (
+                patch.dict(os.environ, {"ASR_ENGINE": "whisper"}, clear=False),
+                patch("app.services.model_client.LocalASRClient") as local_client,
+            ):
+                local_client.return_value.transcribe.return_value = {"segments": []}
+                output = AudioTranscriptionClient().transcribe(audio_path)
+
+            self.assertEqual({"segments": []}, output)
+            local_client.return_value.transcribe.assert_called_once_with(audio_path)
+
+    def test_local_asr_auto_device_prefers_cuda(self) -> None:
+        with patch("app.services.local_asr.torch_cuda_is_available", return_value=True):
+            self.assertEqual(("cuda", ""), pick_whisper_device("auto"))
+
+    def test_local_asr_auto_device_falls_back_to_cpu_when_cuda_is_unavailable(self) -> None:
+        with patch("app.services.local_asr.torch_cuda_is_available", return_value=False):
+            self.assertEqual(("cpu", ""), pick_whisper_device("auto"))
+
+    def test_local_asr_explicit_cuda_falls_back_when_torch_cuda_is_unavailable(self) -> None:
+        with patch("app.services.local_asr.torch_cuda_is_available", return_value=False):
+            self.assertEqual(
+                ("cpu", "ASR_DEVICE=cuda requested, but torch.cuda.is_available() is false"),
+                pick_whisper_device("cuda"),
+            )
+
+    def test_detects_unsupported_json_mode_error(self) -> None:
+        self.assertTrue(
+            is_unsupported_json_mode_error(
+                Exception("response_format.type json_object is not supported by this model")
+            )
+        )
+        self.assertFalse(is_unsupported_json_mode_error(Exception("authentication failed")))
+
+    def test_retries_chat_without_json_mode_when_model_rejects_it(self) -> None:
+        class FakeCompletions:
+            def __init__(self) -> None:
+                self.requests = []
+
+            def create(self, **request):
+                self.requests.append(request)
+                if "response_format" in request:
+                    raise BadRequestError(
+                        "response_format.type json_object is not supported by this model",
+                        response=SimpleNamespace(
+                            status_code=400,
+                            headers={},
+                            request=SimpleNamespace(),
+                        ),
+                        body=None,
+                    )
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content='{"highlights":[]}'))]
+                )
+
+        completions = FakeCompletions()
+        fake_openai = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "MODEL_BASE_URL": "https://example.test/v1",
+                    "MODEL_API_KEY": "test-key",
+                    "MODEL_NAME": "test-model",
+                },
+            ),
+            patch("openai.OpenAI", return_value=fake_openai),
+        ):
+            output = ModelClient().chat([{"role": "user", "content": "test"}], json_object=True)
+
+        self.assertEqual('{"highlights":[]}', output)
+        self.assertIn("response_format", completions.requests[0])
+        self.assertNotIn("response_format", completions.requests[1])
+
+    def test_generates_manifest_from_existing_transcript_json(self) -> None:
+        class FakeModelClient:
+            is_configured = True
+
+            def chat(self, messages, *, json_object=False):
+                self.messages = messages
+                self.json_object = json_object
+                return ManifestGenerationTests.MODEL_JSON
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            video_path = root / "episode-1.mp4"
+            video_path.write_bytes(b"video")
+            input_transcript_path = root / "input-transcript.json"
+            input_transcript_path.write_text(
+                '{"segments":[{"start":12.3,"end":16.8,"text":"identity is fake"}]}',
+                encoding="utf-8",
+            )
+            manifest_root = root / "manifests"
+            transcript_root = root / "transcripts"
+
+            client = FakeModelClient()
+            with patch("app.services.episode_manifest_pipeline.video_duration_ms", return_value=60000):
+                manifest, transcript_path, manifest_path = generate_episode_manifest(
+                    video_path,
+                    transcript_json_path=input_transcript_path,
+                    manifest_root=manifest_root,
+                    transcript_root=transcript_root,
+                    model_client=client,
+                )
+
+            expected_content_id = content_id_from_relative_path(video_path.name)
+            self.assertEqual(f"hl-{expected_content_id}-001", manifest.highlights[0].id)
+            self.assertTrue(transcript_path.exists())
+            self.assertTrue(manifest_path.exists())
+            self.assertIn("identity is fake", client.messages[1]["content"])
+            self.assertNotIn("speaker=旁白", client.messages[1]["content"])
+
+    def test_repairs_mojibake_before_prompting_model(self) -> None:
+        class InspectingModelClient:
+            is_configured = True
+
+            def chat(self, messages, *, json_object=False):
+                self.messages = messages
+                return ManifestGenerationTests.MODEL_JSON
+
+        client = InspectingModelClient()
+        generate_highlight_candidates(
+            HighlightCandidateRequest(
+                content_id="test-content",
+                transcript="[00:00.000 - 00:03.000] 鍝庡揩鐪嬶紝",
+                duration_ms=60000,
+            ),
+            model_client=client,
+            fallback=False,
+        )
+
+        self.assertIn("哎快看，", client.messages[1]["content"])
+
+    def test_repairs_invalid_generated_manifest(self) -> None:
+        class RepairingModelClient:
+            is_configured = True
+
+            def __init__(self) -> None:
+                self.requests = []
+
+            def chat(self, messages, *, json_object=False):
+                self.requests.append(messages)
+                if len(self.requests) == 1:
+                    return '{"content_id":"test-content","highlights":[]}'
+                return ManifestGenerationTests.MODEL_JSON
+
+        client = RepairingModelClient()
+        manifest = generate_highlight_candidates(
+            HighlightCandidateRequest(
+                content_id="test-content",
+                transcript="[00:12.000 - 00:17.000] identity is fake",
+                duration_ms=60000,
+            ),
+            model_client=client,
+            fallback=False,
+        )
+
+        self.assertEqual(2, len(client.requests))
+        self.assertEqual("hl-test-content-001", manifest.highlights[0].id)
+        self.assertIn("validation_error", client.requests[1][1]["content"])
+
+    def test_can_repair_generated_manifest_up_to_three_times(self) -> None:
+        class ThirdRepairModelClient:
+            is_configured = True
+
+            def __init__(self) -> None:
+                self.requests = []
+
+            def chat(self, messages, *, json_object=False):
+                self.requests.append(messages)
+                if len(self.requests) < 4:
+                    return '{"content_id":"test-content","version":"0.2.0","highlights":[]}'
+                return ManifestGenerationTests.MODEL_JSON
+
+        client = ThirdRepairModelClient()
+        manifest = generate_highlight_candidates(
+            HighlightCandidateRequest(
+                content_id="test-content",
+                transcript="[00:12.000 - 00:17.000] identity is fake",
+                duration_ms=60000,
+            ),
+            model_client=client,
+            fallback=False,
+        )
+
+        self.assertEqual(4, len(client.requests))
+        self.assertEqual("hl-test-content-001", manifest.highlights[0].id)
+        self.assertIn("validation_error", client.requests[3][1]["content"])
+
+    def test_raises_when_repaired_manifest_is_still_invalid(self) -> None:
+        class BrokenModelClient:
+            is_configured = True
+
+            def __init__(self) -> None:
+                self.call_count = 0
+
+            def chat(self, messages, *, json_object=False):
+                self.call_count += 1
+                return '{"content_id":"test-content","highlights":[]}'
+
+        client = BrokenModelClient()
+        with self.assertRaises(ValueError):
+            generate_highlight_candidates(
+                HighlightCandidateRequest(
+                    content_id="test-content",
+                    transcript="[00:12.000 - 00:17.000] identity is fake",
+                    duration_ms=60000,
+                ),
+                model_client=client,
+                fallback=False,
+            )
+
+        self.assertEqual(4, client.call_count)
+
+
 if __name__ == "__main__":
     unittest.main()
+

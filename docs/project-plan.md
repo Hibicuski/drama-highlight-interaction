@@ -26,16 +26,18 @@
 | M4 | 6 月 7 日至 6 月 9 日 | 剧尾轻量续写、动效 polish、部署 |
 | M5 | 6 月 10 日至 6 月 11 日 | 录屏、文档完善、最终演示验证 |
 
-## 数据模型草案
+## 数据模型
 
 | 表 | 字段 |
 |---|---|
 | `drama` | `id`, `title`, `poster`, `tags` |
-| `episode` | `id`, `drama_id`, `title`, `video_url`, `duration_ms` |
-| `highlight_point` | `id`, `episode_id`, `start_ms`, `end_ms`, `type`, `intensity`, `payload` |
-| `interaction_event` | `id`, `session_id`, `episode_id`, `highlight_id`, `action`, `created_at` |
-| `aggregate_snapshot` | `episode_id`, `highlight_id`, `counter`, `updated_at` |
-| `branch_session` | `id`, `session_id`, `episode_id`, `prompt`, `result`, `status` |
+| `episode` | `id`, `content_id`, `drama_id`, `title`, `video_url`, `duration_ms` |
+| `highlight_point` | `id`, `content_id`, `start_ms`, `end_ms`, `type`, `intensity`, `payload` |
+| `interaction_event` | `id`, `session_id`, `content_id`, `highlight_id`, `action`, `created_at`，`user_id`（预留，接入用户系统后使用） |
+| `aggregate_snapshot` | `content_id`, `highlight_id`, `counter`, `updated_at` |
+| `branch_session` | `id`, `session_id`, `content_id`, `prompt`, `result`, `status`，`user_id`（预留，接入用户系统后使用） |
+
+> `user_id` 为预留的可空字段，当前互动与续写均以 `session_id` 标识访客，接入用户系统后再回填。
 
 ## AI 辅助说明
 

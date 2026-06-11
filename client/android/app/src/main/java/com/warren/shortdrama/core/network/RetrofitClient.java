@@ -1,6 +1,9 @@
 package com.warren.shortdrama.core.network;
 
+import android.content.Context;
+
 import com.warren.shortdrama.BuildConfig;
+import com.warren.shortdrama.R;
 
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
@@ -9,12 +12,13 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class RetrofitClient {
 
-    // Android emulator maps host localhost to 10.0.2.2.
-    private static final String BASE_URL = "http://10.0.2.2:3000/api/";
     private static Retrofit retrofit;
+    private static String activeBaseUrl;
 
-    public static Retrofit get() {
-        if (retrofit == null) {
+    public static Retrofit get(Context context) {
+        Context appContext = context.getApplicationContext();
+        String baseUrl = appContext.getString(R.string.config_api_base_url);
+        if (retrofit == null || !baseUrl.equals(activeBaseUrl)) {
             OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
             if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor log = new HttpLoggingInterceptor();
@@ -24,15 +28,16 @@ public class RetrofitClient {
             OkHttpClient client = clientBuilder.build();
 
             retrofit = new Retrofit.Builder()
-                    .baseUrl(BASE_URL)
+                    .baseUrl(baseUrl)
                     .client(client)
                     .addConverterFactory(GsonConverterFactory.create())
                     .build();
+            activeBaseUrl = baseUrl;
         }
         return retrofit;
     }
 
-    public static ApiService api() {
-        return get().create(ApiService.class);
+    public static ApiService api(Context context) {
+        return get(context).create(ApiService.class);
     }
 }

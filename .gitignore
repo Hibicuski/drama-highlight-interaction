@@ -36,6 +36,7 @@ Thumbs.db
 # Media and generated demo artifacts
 assets/raw/
 recordings/
+server/data/
 *.mp4
 *.mov
 *.avi

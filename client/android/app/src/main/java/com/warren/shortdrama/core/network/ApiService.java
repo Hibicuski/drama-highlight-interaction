@@ -21,8 +21,8 @@ public interface ApiService {
     @GET("dramas/{id}/episodes")
     Call<List<Episode>> getEpisodes(@Path("id") int dramaId);
 
-    @GET("episodes/{id}/manifest")
-    Call<HighlightManifest> getManifest(@Path("id") int episodeId);
+    @GET("contents/{id}/manifest")
+    Call<HighlightManifest> getManifest(@Path("id") String contentId);
 
     @POST("interactions")
     Call<InteractionModels.InteractionResponse> reportInteraction(@Body InteractionModels.InteractionRequest request);

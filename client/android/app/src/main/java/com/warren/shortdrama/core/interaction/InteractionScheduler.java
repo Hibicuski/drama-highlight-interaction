@@ -20,6 +20,7 @@ public class InteractionScheduler {
     private final DramaPlayer player;
     private final HighlightManifest manifest;
     private final InteractionListener listener;
+    private final int tickIntervalMs;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Set<String> shownHighlights = new HashSet<>();
     private String activeHighlightId = null;
@@ -31,15 +32,21 @@ public class InteractionScheduler {
             if (!running) return;
             checkProgress();
             if (running) {
-                handler.postDelayed(this, 500);
+                handler.postDelayed(this, tickIntervalMs);
             }
         }
     };
 
-    public InteractionScheduler(DramaPlayer player, HighlightManifest manifest, InteractionListener listener) {
+    public InteractionScheduler(
+            DramaPlayer player,
+            HighlightManifest manifest,
+            InteractionListener listener,
+            int tickIntervalMs
+    ) {
         this.player = player;
         this.manifest = manifest;
         this.listener = listener;
+        this.tickIntervalMs = tickIntervalMs;
     }
 
     public void start() {

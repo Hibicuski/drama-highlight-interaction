@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Drama(BaseModel):
@@ -13,16 +13,20 @@ class Drama(BaseModel):
 
 class Episode(BaseModel):
     id: int
+    content_id: str
     drama_id: int
     episode_index: int
     title: str
     video_url: str
+    poster: str = ""
     duration_ms: int = 0
 
 
 class HighlightAction(BaseModel):
     key: str
     label: str
+    tone: str | None = None
+    icon: str | None = None
 
 
 class HighlightPayload(BaseModel):
@@ -42,15 +46,25 @@ class HighlightPoint(BaseModel):
 
 
 class HighlightManifest(BaseModel):
-    episode_id: int
+    content_id: str = ""
     version: str = "0.1.0"
     highlights: list[HighlightPoint] = Field(default_factory=list)
 
 
 class InteractionRequest(BaseModel):
-    episode_id: int
+    content_id: str
     highlight_id: str
     action: str
+    session_id: str
+    user_id: str | None = None
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("session_id is required")
+        return value
 
 
 class InteractionResponse(BaseModel):
@@ -59,13 +73,15 @@ class InteractionResponse(BaseModel):
 
 
 class HighlightCandidateRequest(BaseModel):
-    episode_id: int | None = None
+    content_id: str | None = None
     summary: str = ""
     transcript: str = ""
+    duration_ms: int = 0
+    persist: bool = False
 
 
 class ContinuationRequest(BaseModel):
-    episode_id: int
+    content_id: str
     choice: str
     summary: str = ""
 

@@ -10,22 +10,22 @@ from urllib.parse import quote
 from app.db.models import (
     Drama,
     Episode,
-    HighlightAction,
     HighlightManifest,
-    HighlightPayload,
-    HighlightPoint,
 )
+from app.services.manifest_store import content_id_from_relative_path, load_manifest
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi"}
 POSTER_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 PREFERRED_POSTER_NAMES = {"poster", "cover", "封面"}
+GENERATED_POSTER_DIR_NAME = ".generated-posters"
+DEFAULT_POSTER_FILE_NAME = "__default_poster__.png"
 LOGGER = logging.getLogger(__name__)
 
 
-def scan_local_dramas(local_drama_root: Path, public_base_url: str) -> tuple[list[Drama], list[Episode], dict[int, HighlightManifest]]:
+def scan_local_dramas(local_drama_root: Path, public_base_url: str) -> tuple[list[Drama], list[Episode], dict[str, HighlightManifest]]:
     dramas: list[Drama] = []
     episodes: list[Episode] = []
-    manifests: dict[int, HighlightManifest] = {}
+    manifests: dict[str, HighlightManifest] = {}
 
     if not local_drama_root.exists():
         return dramas, episodes, manifests
@@ -45,10 +45,22 @@ def scan_local_dramas(local_drama_root: Path, public_base_url: str) -> tuple[lis
 
         drama_id = 1000 + drama_index
         poster_file = find_poster_file(drama_dir)
+        episode_posters_by_path: dict[Path, str] = {}
+
+        for video_file in video_files:
+            relative_path = video_file.relative_to(local_drama_root)
+            content_id = content_id_from_relative_path(relative_path)
+            episode_poster = find_episode_poster_file(video_file)
+            if episode_poster is None:
+                episode_poster = generate_episode_poster(video_file, local_drama_root, content_id)
+            if episode_poster is not None:
+                episode_posters_by_path[video_file] = poster_url_for_file(episode_poster, local_drama_root, public_base_url)
+
         poster_url = ""
         if poster_file is not None:
-            poster_path = quote(poster_file.relative_to(local_drama_root).as_posix(), safe="/")
-            poster_url = f"{public_base_url}/posters/{poster_path}"
+            poster_url = poster_url_for_file(poster_file, local_drama_root, public_base_url)
+        elif video_files:
+            poster_url = episode_posters_by_path.get(video_files[0], default_poster_url(public_base_url))
 
         dramas.append(
             Drama(
@@ -63,21 +75,25 @@ def scan_local_dramas(local_drama_root: Path, public_base_url: str) -> tuple[lis
         for episode_position, video_file in enumerate(video_files, start=1):
             parsed_episode_index = episode_index_from_name(video_file.name)
             episode_index = parsed_episode_index if parsed_episode_index is not None else episode_position
-            episode_id = drama_id * 1000 + episode_position
+            episode_runtime_id = drama_id * 1000 + episode_position
             relative_path = video_file.relative_to(local_drama_root)
             encoded_path = quote(relative_path.as_posix(), safe="/")
+            content_id = content_id_from_relative_path(relative_path)
 
+            duration_ms = video_duration_ms(video_file)
             episodes.append(
                 Episode(
-                    id=episode_id,
+                    id=episode_runtime_id,
+                    content_id=content_id,
                     drama_id=drama_id,
                     episode_index=episode_index,
                     title=video_file.stem,
                     video_url=f"{public_base_url}/videos/{encoded_path}",
-                    duration_ms=video_duration_ms(video_file),
+                    poster=episode_posters_by_path.get(video_file, poster_url),
+                    duration_ms=duration_ms,
                 )
             )
-            manifests[episode_id] = default_manifest(episode_id)
+            manifests[content_id] = load_manifest(content_id, duration_ms) or empty_manifest(content_id)
 
     return dramas, episodes, manifests
 
@@ -88,6 +104,56 @@ def find_poster_file(drama_dir: Path) -> Path | None:
         key=lambda item: (item.stem.lower() not in PREFERRED_POSTER_NAMES, item.name),
     )
     return poster_files[0] if poster_files else None
+
+
+def find_episode_poster_file(video_file: Path) -> Path | None:
+    for extension in POSTER_EXTENSIONS:
+        candidate = video_file.with_suffix(extension)
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def generate_episode_poster(video_file: Path, local_drama_root: Path, content_id: str) -> Path | None:
+    poster_dir = local_drama_root / GENERATED_POSTER_DIR_NAME
+    poster_path = poster_dir / f"{content_id}.jpg"
+    if poster_path.exists() and poster_path.is_file():
+        return poster_path
+
+    ffmpeg_path = os.getenv("FFMPEG_PATH", "ffmpeg")
+    try:
+        poster_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [
+                ffmpeg_path,
+                "-y",
+                "-ss",
+                "00:00:01",
+                "-i",
+                str(video_file),
+                "-frames:v",
+                "1",
+                "-q:v",
+                "3",
+                str(poster_path),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return poster_path if poster_path.exists() and poster_path.is_file() else None
+    except (OSError, subprocess.SubprocessError):
+        LOGGER.warning("Unable to generate poster for %s. Install ffmpeg or set FFMPEG_PATH.", video_file)
+        return None
+
+
+def poster_url_for_file(poster_file: Path, local_drama_root: Path, public_base_url: str) -> str:
+    poster_path = quote(poster_file.relative_to(local_drama_root).as_posix(), safe="/")
+    return f"{public_base_url}/posters/{poster_path}"
+
+
+def default_poster_url(public_base_url: str) -> str:
+    return f"{public_base_url}/posters/{DEFAULT_POSTER_FILE_NAME}"
 
 
 def episode_sort_key(video_file: Path) -> tuple[bool, int, str]:
@@ -119,6 +185,8 @@ def video_duration_ms(video_path: Path) -> int:
                 str(video_path),
             ],
             text=True,
+            encoding="utf-8",
+            errors="replace",
             stderr=subprocess.DEVNULL,
         )
         seconds = float(output.strip())
@@ -128,41 +196,9 @@ def video_duration_ms(video_path: Path) -> int:
         return 0
 
 
-def default_manifest(episode_id: int) -> HighlightManifest:
+def empty_manifest(content_id: str) -> HighlightManifest:
     return HighlightManifest(
-        episode_id=episode_id,
-        highlights=[
-            HighlightPoint(
-                id=f"hl-{episode_id}-001",
-                start_ms=12000,
-                end_ms=18000,
-                type="satisfying",
-                intensity=0.9,
-                template="dual-button",
-                payload=HighlightPayload(
-                    title="爽点来了",
-                    actions=[
-                        HighlightAction(key="satisfying", label="爽了"),
-                        HighlightAction(key="more", label="继续狠一点"),
-                    ],
-                    effect="particle-burst",
-                ),
-            ),
-            HighlightPoint(
-                id=f"hl-{episode_id}-002",
-                start_ms=45000,
-                end_ms=52000,
-                type="twist",
-                intensity=0.85,
-                template="dual-button",
-                payload=HighlightPayload(
-                    title="这波反转你怎么看？",
-                    actions=[
-                        HighlightAction(key="expected", label="意料之中"),
-                        HighlightAction(key="surprised", label="没想到"),
-                    ],
-                    effect="ratio-reveal",
-                ),
-            ),
-        ],
+        content_id=content_id,
+        version="0.2.0",
+        highlights=[],
     )

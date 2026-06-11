@@ -1,4 +1,61 @@
 <resources>
     <string name="app_name">Drama Highlight</string>
     <string name="short_dramas">Short Dramas</string>
+    <string name="status_loading_dramas">Loading dramas from backend...</string>
+    <string name="status_backend_no_dramas">Backend returned no dramas.</string>
+    <string name="status_backend_offline">Backend is offline.</string>
+    <string name="status_loading_episodes">Loading episodes...</string>
+    <string name="error_load_episodes_failed">Failed to load episodes</string>
+    <string name="error_network">Network error</string>
+    <string name="error_manifest_load_failed">Failed to load manifest: %1$d</string>
+    <string name="error_interaction_report_failed">Failed to report interaction: %1$d</string>
+
+    <string name="config_api_base_url" translatable="false">http://10.0.2.2:3000/api/</string>
+    <string name="config_fallback_video_url" translatable="false">https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4</string>
+    <string name="extra_drama" translatable="false">drama</string>
+    <string name="extra_episode" translatable="false">episode</string>
+    <string name="extra_drama_id" translatable="false">drama_id</string>
+    <string name="extra_drama_title" translatable="false">drama_title</string>
+    <string name="extra_drama_description" translatable="false">drama_description</string>
+    <string name="extra_episode_content_id" translatable="false">episode_content_id</string>
+    <string name="extra_episode_title" translatable="false">episode_title</string>
+    <string name="extra_episode_video_url" translatable="false">episode_video_url</string>
+
+    <string name="player_default_episode_title">Episode 1</string>
+    <string name="player_title_format">%1$s - %2$s</string>
+    <string name="episode_index_format">Episode %1$d</string>
+    <string name="episode_duration_format">Duration: %1$02d:%2$02d</string>
+
+    <string name="interaction_badge_poll">剧情投票</string>
+    <string name="interaction_badge_tap_boost">助威互动</string>
+    <string name="interaction_badge_twist">反转时刻</string>
+    <string name="interaction_badge_slap_face">高能打脸</string>
+    <string name="interaction_badge_funny">轻松名场面</string>
+    <string name="interaction_badge_default">高光互动</string>
+    <string name="interaction_feedback_simple">感谢参与！</string>
+    <string name="interaction_stats_received">已收到你的互动</string>
+    <string name="interaction_stats_poll_format">投票已记录 · %1$s · 共 %2$d 人</string>
+    <string name="interaction_stats_boost_format">已助力成功 · 当前 %1$d 次打 call</string>
+    <string name="interaction_stats_default_format">已有 %1$d 人参与互动</string>
+    <string name="interaction_stats_no_ratio">暂无占比</string>
+    <string name="interaction_stats_top_action_format">%1$s 领先 %2$d%%</string>
+    <string name="interaction_action_icon_separator" translatable="false">  </string>
+    <string name="interaction_icon_heart" translatable="false">+</string>
+    <string name="interaction_icon_fire" translatable="false">HOT</string>
+    <string name="interaction_icon_shock" translatable="false">!</string>
+    <string name="interaction_icon_laugh" translatable="false">HA</string>
+    <string name="interaction_icon_question" translatable="false">?</string>
+    <string name="interaction_icon_check" translatable="false">OK</string>
+    <string name="interaction_icon_boost" translatable="false">GO</string>
+
+    <string name="tools_text_loading_dramas">Loading dramas...</string>
+    <string name="tools_text_episodes">Episodes</string>
+    <string name="tools_text_loading_episodes">Loading episodes...</string>
+    <string name="tools_text_drama_title">Drama Title</string>
+    <string name="tools_text_drama_description">Short description of the drama...</string>
+    <string name="tools_text_episode_index">Episode 1</string>
+    <string name="tools_text_episode_title">Episode Title</string>
+    <string name="tools_text_episode_duration">Duration: 00:30</string>
+    <string name="tools_text_interaction_badge">反转投票</string>
+    <string name="tools_text_interaction_title">Highlight Title</string>
 </resources>

@@ -4,40 +4,59 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="8dp"
-    app:cardCornerRadius="8dp"
-    app:cardElevation="2dp">
+    android:layout_margin="@dimen/spacing_l"
+    app:cardCornerRadius="@dimen/corner_s"
+    app:cardElevation="@dimen/card_elevation_s">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:orientation="horizontal"
+        android:padding="@dimen/spacing_3xl">
 
-        <TextView
-            android:id="@+id/tv_episode_index"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#999999"
-            android:textSize="12sp"
-            tools:text="Episode 1" />
+        <ImageView
+            android:id="@+id/iv_episode_poster"
+            android:layout_width="@dimen/media_poster_width"
+            android:layout_height="@dimen/media_poster_height"
+            android:background="@color/episode_poster_placeholder"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
 
-        <TextView
-            android:id="@+id/tv_episode_title"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="@dimen/spacing_none"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            tools:text="Episode Title"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="@dimen/spacing_2xl"
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/tv_episode_duration"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="#666666"
-            android:textSize="12sp"
-            tools:text="Duration: 00:30" />
+            <TextView
+                android:id="@+id/tv_episode_index"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_tertiary"
+                android:textSize="@dimen/text_xs"
+                tools:text="@string/tools_text_episode_index" />
+
+            <TextView
+                android:id="@+id/tv_episode_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_s"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textSize="@dimen/text_m"
+                android:textStyle="bold"
+                tools:text="@string/tools_text_episode_title" />
+
+            <TextView
+                android:id="@+id/tv_episode_duration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_s"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_xs"
+                tools:text="@string/tools_text_episode_duration" />
+        </LinearLayout>
     </LinearLayout>
 </androidx.cardview.widget.CardView>
