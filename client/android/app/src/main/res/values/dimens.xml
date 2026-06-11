@@ -38,6 +38,7 @@
     <dimen name="interaction_button_icon_size">20dp</dimen>
     <dimen name="interaction_button_icon_padding">8dp</dimen>
     <dimen name="interaction_overlay_translation_y">100dp</dimen>
+    <dimen name="player_title_max_width">260dp</dimen>
     <dimen name="icon_launcher_size">108dp</dimen>
     <dimen name="avatar_size">40dp</dimen>
 </resources>

@@ -136,8 +136,19 @@
         android:layout_height="wrap_content"
         android:layout_gravity="top|start"
         android:layout_margin="@dimen/spacing_3xl"
+        android:background="@drawable/bg_player_title_scrim"
+        android:elevation="@dimen/card_elevation_m"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:maxWidth="@dimen/player_title_max_width"
+        android:paddingHorizontal="@dimen/spacing_2xl"
+        android:paddingVertical="@dimen/spacing_l"
+        android:shadowColor="@color/shadow_strong"
+        android:shadowDx="1"
+        android:shadowDy="1"
+        android:shadowRadius="3"
         android:textColor="@android:color/white"
-        android:textSize="@dimen/text_xl"
+        android:textSize="@dimen/text_l"
         android:textStyle="bold" />
 
 </FrameLayout>

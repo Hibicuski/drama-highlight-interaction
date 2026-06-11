@@ -1,6 +1,7 @@
 package com.warren.shortdrama.feature.episode_player;
 
 import android.os.Bundle;
+import android.view.View;
 import android.widget.TextView;
 
 import androidx.annotation.OptIn;
@@ -55,6 +56,17 @@ public class EpisodePlayerActivity extends AppCompatActivity {
 
         String videoUrl = getIntent().getStringExtra(getString(R.string.extra_episode_video_url));
         dramaPlayer = new DramaPlayer(this, playerView, videoUrl);
+
+        // Fade the title together with the player controls: once the controller
+        // auto-hides during playback the title follows, so a long title never
+        // sits on top of the drama.
+        final TextView titleView = tvTitle;
+        playerView.setControllerVisibilityListener(
+                (PlayerView.ControllerVisibilityListener) visibility ->
+                        titleView.animate()
+                                .alpha(visibility == View.VISIBLE ? 1f : 0f)
+                                .setDuration(200)
+                                .start());
 
         String contentId = getIntent().getStringExtra(getString(R.string.extra_episode_content_id));
         if (contentId != null && !contentId.isEmpty()) {
