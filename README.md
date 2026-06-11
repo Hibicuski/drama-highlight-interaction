@@ -1,80 +1,103 @@
 # Drama Highlight Interaction
 
-短剧高光互动 Demo。当前已完成 Android 客户端和 FastAPI 后端 MVP：展示真实短剧列表和剧集列表、播放本地 MP4，并在指定剧情时间点展示互动浮层。
+短剧高光互动系统。围绕"剧情高光点的离线打标 → 下发 → 端上即时互动 → 互动数据聚合回流"构建端到端闭环，包含 Android 客户端与 FastAPI 服务端。
 
-## 当前能力
+## 1. 系统概览
 
-- 从后端加载真实短剧和剧集数据
-- 展示短剧目录中的可选封面图片
-- 使用 Media3 ExoPlayer 播放 MP4
-- 获取每集高光 Manifest
-- 支持离线 ASR 转写和高光 Manifest 生成，可选实验文本级说话人标注
-- 根据播放进度自动展示互动浮层
-- 支持 1 到 3 个互动选项、白名单 UI 风格、选项图标和选项色彩
-- 上报用户选择并展示聚合互动人数
-- 在单次播放中避免重复展示同一个高光点
-- 没有合格 Manifest 时返回空高光列表，不使用固定假高光兜底
+```text
+┌──────────────────────┐        REST/JSON         ┌───────────────────────────┐
+│   Android 客户端      │  ───────────────────────▶ │     FastAPI 服务端          │
+│                      │                          │                            │
+│  剧集列表 / 播放器     │  ◀─ dramas / episodes ── │  媒体扫描  ┐                 │
+│  互动浮层调度          │  ◀─ manifest ─────────── │  Manifest │── PostgreSQL    │
+│  互动上报 / 聚合展示    │  ── interactions ──────▶ │  互动聚合  ┘                 │
+└──────────────────────┘  ◀─ aggregate ────────── └───────────┬───────────────┘
+                                                              │ 视频 / 封面 (HTTP Range)
+                                                              ▼
+                                            本地短剧目录 (drama/) + 离线生成产物 (data/)
+```
 
-## 目录
+整个系统分为三条数据流：
+
+| 数据流 | 触发时机 | 说明 |
+|---|---|---|
+| 内容下发 | 启动扫描 / 客户端请求 | 服务端扫描本地短剧目录，下发剧集元数据、视频流和高光 Manifest |
+| 离线打标 | 运维侧手动 / 批处理脚本 | 视频 → 抽音频 → ASR 转写 → LLM 生成高光 Manifest → 落盘并入库 |
+| 互动回流 | 用户点击互动组件 | 客户端上报互动事件，服务端持久化并返回实时聚合计数 |
+
+## 2. 技术栈
+
+| 层 | 选型 |
+|---|---|
+| 客户端 | Android (Java)、Media3 ExoPlayer、Retrofit + Gson、OkHttp、Glide |
+| 服务端 | Python 3.11、FastAPI、Uvicorn、SQLAlchemy 2.x、Pydantic v2 |
+| 持久化 | PostgreSQL 16（可降级到内存存储用于测试） |
+| 内容理解 | OpenAI 兼容大模型（默认火山方舟 Doubao-Seed），FFmpeg 抽音频，ASR + LLM 离线流水线 |
+
+## 3. 仓库结构
 
 ```text
 .
-├── client/
-│   └── android/        # Android Studio 项目
-├── server/             # FastAPI 后端、本地视频扫描、AI 高光生成和接口测试
-├── docs/               # 项目规划和分支说明
-└── assets/             # Manifest 示例等资源
+├── client/android/     # Android Studio 工程（客户端）
+├── server/             # FastAPI 服务端、媒体扫描、AI 高光生成、接口测试
+├── docs/               # 项目排期与分支管理
+├── assets/             # Manifest 示例资源
+└── docker-compose.yml  # 本地 PostgreSQL
 ```
 
-## Android 客户端
+短剧素材目录 `drama/` 位于本仓库同级（默认 `../drama`），不纳入版本控制。
 
-使用 Android Studio 打开 `client/android`，运行 `app` 模块。项目使用 Android Studio 自带 JDK，无需额外配置本地 JDK。
+## 4. 内容标识与数据模型
 
-Android 模拟器通过以下地址访问电脑上的后端：
+每集视频以"相对路径 SHA-1 前 16 位"生成稳定 `content_id`，作为 Manifest、转写文件、Manifest 查询与互动上报的统一主键。`Episode.id` 仅为当前扫描结果中的运行时数字 ID，新增剧集后可能变化，不参与上述关联。
 
-```text
-http://10.0.2.2:3000/api/
-```
+| 表 | 主键 | 用途 |
+|---|---|---|
+| `drama` | `id` | 短剧元数据 |
+| `episode` | `id` / `content_id`(唯一) | 剧集元数据、视频地址、时长 |
+| `highlight_point` | `id` | 高光点时间窗、类型、互动 payload |
+| `interaction_event` | `id` | 每次互动点击的明细事件（含可空 `user_id`） |
+| `aggregate_snapshot` | `(highlight_id, action)` | 高光点各动作的聚合计数 |
+| `branch_session` | `id` | 剧情续写会话（预留） |
 
-真机调试时，需要将 `RetrofitClient.BASE_URL` 改为电脑的局域网 IP。
+完整表结构见 [server/db/schema.sql](server/db/schema.sql)（运行时由 SQLAlchemy 建表，schema.sql 为说明版本）。
 
-## FastAPI 后端
+## 5. API 概览
 
-后端默认使用 PostgreSQL 持久化短剧、剧集、高光点、互动事件和聚合快照。先启动本地数据库：
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/dramas` | 短剧列表 |
+| `GET` | `/api/dramas/{id}/episodes` | 指定短剧的剧集列表 |
+| `GET` | `/api/contents/{content_id}/manifest` | 指定剧集的高光 Manifest |
+| `POST` | `/api/interactions` | 上报互动事件，返回实时聚合 |
+| `GET` | `/api/highlights/{id}/aggregate` | 查询高光点聚合计数 |
+| `GET` | `/videos/{relative_path}` | 视频流，支持 HTTP Range |
+| `GET` | `/posters/{relative_path}` | 封面图片 |
+| `GET` | `/health` | 健康检查 |
+
+互动上报必须携带客户端本地持久化的 `session_id`（首次使用生成 `device_` 前缀 UUID）。事件写入 `interaction_event` 并同步更新 `aggregate_snapshot`，服务重启后聚合结果不丢失。
+
+接口的实现细节、AI 离线生成流程与配置见各子文档。
+
+## 6. 快速开始
 
 ```powershell
+# 1. 启动数据库
 docker compose up -d postgres
-```
 
-后端启动时扫描仓库同级的 `drama` 文件夹，同步元数据和高光点到 PostgreSQL。安装 FFmpeg 后，服务会通过 `ffprobe` 读取每集真实时长：
-
-```powershell
+# 2. 启动服务端（见 server/README.md）
 cd server
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-ffprobe -version
 uvicorn app.main:app --host 0.0.0.0 --port 3000
+
+# 3. 用 Android Studio 打开 client/android，运行 app 模块
 ```
 
-详细配置见 [后端运行说明](server/README.md)。
+## 7. 文档索引
 
-## 后端接口
-
-Android 客户端依赖以下 REST API：
-
-- `GET /api/dramas`
-- `GET /api/dramas/{id}/episodes`
-- `GET /api/contents/{content_id}/manifest`
-- `POST /api/interactions`
-- `GET /api/highlights/{id}/aggregate`
-
-剧集数据中的 `content_id` 是由视频相对路径 hash 得到的稳定内容 ID。`Episode.id` 仍可能存在，但只作为当前扫描结果里的运行时数字 ID，不再用于 Manifest 文件名、Manifest 查询或互动上报。
-
-互动上报必须包含客户端本地持久化的 `session_id`，Android 会在首次使用时生成 `device_` 前缀的 UUID。服务端会写入 `interaction_event`，并同步更新 `aggregate_snapshot`。因此服务重启后，已经产生的互动人数和动作分布不会丢失。后续接用户系统时，可在同一事件表补充可空的 `user_id`。
-
-## 文档
-
-- [Android 运行说明](client/android/README.md)
-- [后端运行说明](server/README.md)
+- [服务端技术说明](server/README.md) — 架构、配置、Manifest 离线生成、API 参考
+- [Android 客户端技术说明](client/android/README.md) — 模块结构、播放与互动时序、网络层
+- [项目拆解与排期](docs/project-plan.md)
 - [分支管理](docs/branching.md)
