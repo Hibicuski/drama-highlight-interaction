@@ -383,8 +383,17 @@ def create_store() -> Store:
     return DatabaseStore()
 
 
-store = create_store()
+_store: Store | None = None
+_store_lock = Lock()
 
 
 def get_store() -> Store:
-    return store
+    # Lazily build the store on first use so importing the app stays cheap and
+    # connection/scan errors surface when the store is needed rather than at
+    # import time (e.g. uvicorn app.main:app before Postgres is up).
+    global _store
+    if _store is None:
+        with _store_lock:
+            if _store is None:
+                _store = create_store()
+    return _store
