@@ -20,13 +20,18 @@ from app.db.session import InMemoryStore
 from app.main import get_poster, parse_range_header, safe_media_path, safe_video_path
 from app.services.episode_manifest_pipeline import extract_audio, format_timed_transcript, generate_episode_manifest
 from app.services.highlight_generator import generate_highlight_candidates
+from app.services.local_asr import pick_whisper_device
 from app.db.models import HighlightCandidateRequest
 from app.services.manifest_store import content_id_from_relative_path, load_manifest, parse_model_manifest, save_manifest
 from app.services.media_scanner import DEFAULT_POSTER_FILE_NAME, POSTER_EXTENSIONS
 from app.services.media_scanner import scan_local_dramas
-from app.services.model_client import ModelClient, extract_responses_output_text, is_unsupported_json_mode_error
+from app.services.model_client import (
+    AudioTranscriptionClient,
+    ModelClient,
+    extract_responses_output_text,
+    is_unsupported_json_mode_error,
+)
 from app.services.text_quality import repair_mojibake
-from app.services.transcript_enricher import enrich_transcript, format_enriched_transcript
 
 
 class RangeHeaderTests(unittest.TestCase):
@@ -274,132 +279,6 @@ class InteractionStoreTests(unittest.TestCase):
             self.assertEqual(20, store.get_aggregate(request.highlight_id).count)
 
 
-class TranscriptEnrichmentTests(unittest.TestCase):
-    def test_enrichment_preserves_asr_timing_and_text(self) -> None:
-        class FakeModelClient:
-            is_configured = True
-
-            def chat(self, messages, *, json_object=False):
-                return """{
-                  "characters": [
-                    {"id": "speaker_1", "name": "容玉", "role": "女主", "traits": ["强势"]}
-                  ],
-                  "segments": [
-                    {
-                      "index": 0,
-                      "start": 99.0,
-                      "end": 100.0,
-                      "text": "模型改错的台词",
-                      "speaker": "speaker_1",
-                      "speaker_name": "容玉",
-                      "role": "女主",
-                      "scene": "被质疑后强势回击",
-                      "emotion": "霸气",
-                      "beat_type": "slap-face",
-                      "highlight_reason": "一句话压住全场",
-                      "confidence": 0.9
-                    }
-                  ]
-                }"""
-
-        transcript = {"segments": [{"start": 63.17, "end": 78.77, "text": "我在哪，纪家就在哪"}]}
-        enriched = enrich_transcript(transcript, model_client=FakeModelClient())
-        segment = enriched["segments"][0]
-
-        self.assertEqual(63.17, segment["start"])
-        self.assertEqual(78.77, segment["end"])
-        self.assertEqual("我在哪，纪家就在哪", segment["text"])
-        self.assertEqual("容玉", segment["speaker_name"])
-        self.assertEqual("speaker_1", segment["speaker"])
-        self.assertNotIn("beat_type", segment)
-        self.assertNotIn("scene", segment)
-
-    def test_low_confidence_speaker_is_not_formatted_as_context(self) -> None:
-        class LowConfidenceModelClient:
-            is_configured = True
-
-            def chat(self, messages, *, json_object=False):
-                return """{
-                  "segments": [
-                    {
-                      "index": 0,
-                      "speaker": "speaker_1",
-                      "speaker_name": "容玉",
-                      "confidence": 0.3
-                    }
-                  ]
-                }"""
-
-        transcript = {"segments": [{"start": 1.0, "end": 3.0, "text": "我不需要进纪家"}]}
-        enriched = enrich_transcript(transcript, model_client=LowConfidenceModelClient())
-        formatted = format_enriched_transcript(enriched)
-
-        self.assertIn("text=我不需要进纪家", formatted)
-        self.assertNotIn("speaker=容玉", formatted)
-        self.assertEqual("", enriched["segments"][0]["speaker_name"])
-
-    def test_high_confidence_speaker_is_formatted_as_advisory_context(self) -> None:
-        class HighConfidenceModelClient:
-            is_configured = True
-
-            def chat(self, messages, *, json_object=False):
-                return """{
-                  "characters": [{"id": "speaker_1", "name": "容玉"}],
-                  "segments": [
-                    {
-                      "index": 0,
-                      "speaker": "speaker_1",
-                      "speaker_name": "容玉",
-                      "scene": "被质疑后强势回击",
-                      "emotion": "霸气",
-                      "beat_type": "slap-face",
-                      "highlight_reason": "一句话反转身份地位",
-                      "confidence": 0.8
-                    }
-                  ]
-                }"""
-
-        transcript = {"segments": [{"start": 1.0, "end": 3.0, "text": "我在哪，纪家就在哪"}]}
-        enriched = enrich_transcript(transcript, model_client=HighConfidenceModelClient())
-        formatted = format_enriched_transcript(enriched)
-
-        self.assertIn("speaker=容玉", formatted)
-        self.assertIn("speakers: speaker_1=容玉", formatted)
-        self.assertNotIn("scene=被质疑后强势回击", formatted)
-        self.assertNotIn("reason=一句话反转身份地位", formatted)
-
-    def test_enrichment_prompt_includes_previous_speaker_context(self) -> None:
-        class InspectingModelClient:
-            is_configured = True
-
-            def chat(self, messages, *, json_object=False):
-                self.messages = messages
-                return """{
-                  "segments": [
-                    {
-                      "index": 0,
-                      "speaker": "speaker_1",
-                      "speaker_name": "容玉",
-                      "confidence": 0.8
-                    }
-                  ]
-                }"""
-
-        client = InspectingModelClient()
-        transcript = {"segments": [{"start": 1.0, "end": 3.0, "text": "我今天必须见到纪老夫人"}]}
-        enrich_transcript(
-            transcript,
-            summary="女主进入纪家。",
-            series_context="episode 1 speakers: speaker_1=容玉",
-            model_client=client,
-        )
-
-        prompt = client.messages[1]["content"]
-        self.assertIn("previous_speakers_context", prompt)
-        self.assertIn("speaker_1=容玉", prompt)
-        self.assertIn("我今天必须见到纪老夫人", prompt)
-
-
 class ManifestGenerationTests(unittest.TestCase):
     MODEL_JSON = """{
       "content_id": "model-content",
@@ -434,6 +313,28 @@ class ManifestGenerationTests(unittest.TestCase):
         self.assertLessEqual(len(manifest.highlights[0].payload.title), 12)
         self.assertEqual("positive", manifest.highlights[0].payload.actions[0].tone)
         self.assertEqual("fire", manifest.highlights[0].payload.actions[0].icon)
+
+    def test_coerces_invalid_effect_to_default(self) -> None:
+        invalid_effect_json = self.MODEL_JSON.replace('"effect": "particle-burst"', '"effect": "rainbow-blast"')
+        manifest = parse_model_manifest(invalid_effect_json, "test-content", 60000)
+
+        self.assertEqual("pulse", manifest.highlights[0].payload.effect)
+
+    def test_accepts_clean_action_labels_outside_recommended_set(self) -> None:
+        json_text = self.MODEL_JSON.replace('"label": "爽"', '"label": "佩服"').replace(
+            '"label": "上头"', '"label": "硬刚"'
+        )
+        manifest = parse_model_manifest(json_text, "test-content", 60000)
+
+        labels = [action.label for action in manifest.highlights[0].payload.actions]
+        self.assertEqual(["佩服", "硬刚"], labels)
+
+    def test_rejects_english_action_label(self) -> None:
+        english_label_json = self.MODEL_JSON.replace('"label": "爽"', '"label": "cool"').replace(
+            '"label": "上头"', '"label": "wow"'
+        )
+        with self.assertRaises(ValueError):
+            parse_model_manifest(english_label_json, "test-content", 60000)
 
     def test_rejects_unknown_action_tone_and_icon_when_no_option_remains(self) -> None:
         invalid_style_json = self.MODEL_JSON.replace('"tone": "positive"', '"tone": "rainbow"').replace(
@@ -529,7 +430,7 @@ class ManifestGenerationTests(unittest.TestCase):
             ]
         }
         self.assertEqual(
-            "[00:12.300 - 00:16.800] speaker_1: identity is fake",
+            "[00:12.300 - 00:16.800] identity is fake",
             format_timed_transcript(transcript),
         )
 
@@ -563,6 +464,36 @@ class ManifestGenerationTests(unittest.TestCase):
             '{"text":"identity is fake","segments":[]}',
             extract_responses_output_text(response),
         )
+
+    def test_audio_transcription_client_dispatches_local_asr_engine(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            audio_path = Path(temp_dir) / "audio.wav"
+            audio_path.write_bytes(b"audio")
+
+            with (
+                patch.dict(os.environ, {"ASR_ENGINE": "whisper"}, clear=False),
+                patch("app.services.model_client.LocalASRClient") as local_client,
+            ):
+                local_client.return_value.transcribe.return_value = {"segments": []}
+                output = AudioTranscriptionClient().transcribe(audio_path)
+
+            self.assertEqual({"segments": []}, output)
+            local_client.return_value.transcribe.assert_called_once_with(audio_path)
+
+    def test_local_asr_auto_device_prefers_cuda(self) -> None:
+        with patch("app.services.local_asr.torch_cuda_is_available", return_value=True):
+            self.assertEqual(("cuda", ""), pick_whisper_device("auto"))
+
+    def test_local_asr_auto_device_falls_back_to_cpu_when_cuda_is_unavailable(self) -> None:
+        with patch("app.services.local_asr.torch_cuda_is_available", return_value=False):
+            self.assertEqual(("cpu", ""), pick_whisper_device("auto"))
+
+    def test_local_asr_explicit_cuda_falls_back_when_torch_cuda_is_unavailable(self) -> None:
+        with patch("app.services.local_asr.torch_cuda_is_available", return_value=False):
+            self.assertEqual(
+                ("cpu", "ASR_DEVICE=cuda requested, but torch.cuda.is_available() is false"),
+                pick_whisper_device("cuda"),
+            )
 
     def test_detects_unsupported_json_mode_error(self) -> None:
         self.assertTrue(
@@ -618,8 +549,6 @@ class ManifestGenerationTests(unittest.TestCase):
             is_configured = True
 
             def chat(self, messages, *, json_object=False):
-                if "summary_hint" in messages[1]["content"]:
-                    raise AssertionError("speaker separation should be disabled by default")
                 self.messages = messages
                 self.json_object = json_object
                 return ManifestGenerationTests.MODEL_JSON
@@ -635,121 +564,23 @@ class ManifestGenerationTests(unittest.TestCase):
             )
             manifest_root = root / "manifests"
             transcript_root = root / "transcripts"
-            enriched_transcript_root = root / "enriched-transcripts"
 
             client = FakeModelClient()
             with patch("app.services.episode_manifest_pipeline.video_duration_ms", return_value=60000):
-                manifest, transcript_path, enriched_transcript_path, manifest_path = generate_episode_manifest(
+                manifest, transcript_path, manifest_path = generate_episode_manifest(
                     video_path,
                     transcript_json_path=input_transcript_path,
                     manifest_root=manifest_root,
                     transcript_root=transcript_root,
-                    enriched_transcript_root=enriched_transcript_root,
                     model_client=client,
                 )
 
             expected_content_id = content_id_from_relative_path(video_path.name)
             self.assertEqual(f"hl-{expected_content_id}-001", manifest.highlights[0].id)
             self.assertTrue(transcript_path.exists())
-            self.assertIsNone(enriched_transcript_path)
             self.assertTrue(manifest_path.exists())
-            self.assertFalse((enriched_transcript_root / f"{expected_content_id}.json").exists())
             self.assertIn("identity is fake", client.messages[1]["content"])
-
-    def test_generates_manifest_from_existing_enriched_transcript_json(self) -> None:
-        class FakeModelClient:
-            is_configured = True
-
-            def chat(self, messages, *, json_object=False):
-                self.messages = messages
-                return ManifestGenerationTests.MODEL_JSON
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            video_path = root / "episode-1.mp4"
-            video_path.write_bytes(b"video")
-            input_transcript_path = root / "input-transcript.json"
-            input_transcript_path.write_text(
-                '{"segments":[{"start":12.3,"end":16.8,"text":"identity is fake"}]}',
-                encoding="utf-8",
-            )
-            input_enriched_path = root / "input-enriched.json"
-            input_enriched_path.write_text(
-                '{"segments":[{"index":0,"start":99.0,"end":100.0,"text":"wrong text","speaker":"speaker_1","speaker_name":"旁白","scene":"身份曝光","confidence":0.8}]}',
-                encoding="utf-8",
-            )
-
-            client = FakeModelClient()
-            with patch("app.services.episode_manifest_pipeline.video_duration_ms", return_value=60000):
-                manifest, _, enriched_transcript_path, _ = generate_episode_manifest(
-                    video_path,
-                    transcript_json_path=input_transcript_path,
-                    enriched_transcript_json_path=input_enriched_path,
-                    manifest_root=root / "manifests",
-                    transcript_root=root / "transcripts",
-                    enriched_transcript_root=root / "enriched-transcripts",
-                    model_client=client,
-                )
-
-            self.assertEqual("hl-" + content_id_from_relative_path(video_path.name) + "-001", manifest.highlights[0].id)
-            self.assertTrue(enriched_transcript_path.exists())
-            self.assertIn("identity is fake", client.messages[1]["content"])
-            self.assertNotIn("wrong text", client.messages[1]["content"])
-            self.assertIn("speaker=旁白", client.messages[1]["content"])
-            self.assertNotIn("scene=身份曝光", client.messages[1]["content"])
-
-    def test_ignores_existing_enriched_transcript_without_useful_metadata(self) -> None:
-        class FakeModelClient:
-            is_configured = True
-
-            def __init__(self) -> None:
-                self.enrichment_calls = 0
-                self.messages = []
-
-            def chat(self, messages, *, json_object=False):
-                self.messages = messages
-                if "summary_hint" in messages[1]["content"]:
-                    self.enrichment_calls += 1
-                    return """{
-                      "segments": [
-                        {
-                          "index": 0,
-                          "speaker": "speaker_1",
-                          "speaker_name": "旁白",
-                          "confidence": 0.8
-                        }
-                      ]
-                    }"""
-                return ManifestGenerationTests.MODEL_JSON
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            video_path = root / "episode-1.mp4"
-            video_path.write_bytes(b"video")
-            input_transcript_path = root / "input-transcript.json"
-            input_transcript_path.write_text(
-                '{"segments":[{"start":12.3,"end":16.8,"text":"identity is fake"}]}',
-                encoding="utf-8",
-            )
-            stale_enriched_path = root / "stale-enriched.json"
-            stale_enriched_path.write_text(
-                '{"summary":"stale","segments":[{"index":0,"confidence":0.0}]}',
-                encoding="utf-8",
-            )
-
-            client = FakeModelClient()
-            with patch("app.services.episode_manifest_pipeline.video_duration_ms", return_value=60000):
-                generate_episode_manifest(
-                    video_path,
-                    transcript_json_path=input_transcript_path,
-                    enriched_transcript_json_path=stale_enriched_path,
-                    manifest_root=root / "manifests",
-                    transcript_root=root / "transcripts",
-                    enriched_transcript_root=root / "enriched-transcripts",
-                    model_client=client,
-                )
-
-            self.assertEqual(1, client.enrichment_calls)
+            self.assertNotIn("speaker=旁白", client.messages[1]["content"])
 
     def test_repairs_mojibake_before_prompting_model(self) -> None:
         class InspectingModelClient:
