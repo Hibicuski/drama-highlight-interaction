@@ -6,7 +6,7 @@
 
 | 关注点 | 选型 |
 |---|---|
-| 语言 / 构建 | Java、Gradle (AGP 9.2.1) |
+| 语言 / 构建 | Java |
 | 播放 | Media3 ExoPlayer 1.8.0 (exoplayer / dash / datasource / ui) |
 | 网络 | Retrofit 3.0.0 + Gson、OkHttp logging-interceptor |
 | 图片 | Glide 5.0.5 |

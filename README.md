@@ -6,11 +6,11 @@
 
 ```text
 ┌──────────────────────┐        REST/JSON         ┌───────────────────────────┐
-│   Android 客户端      │  ───────────────────────▶ │     FastAPI 服务端          │
-│                      │                          │                            │
-│  剧集列表 / 播放器     │  ◀─ dramas / episodes ── │  媒体扫描  ┐                 │
-│  互动浮层调度          │  ◀─ manifest ─────────── │  Manifest │── PostgreSQL    │
-│  互动上报 / 聚合展示    │  ── interactions ──────▶ │  互动聚合  ┘                 │
+│   Android 客户端      │  ───────────────────────▶│     FastAPI 服务端         │
+│                      │                          │                           │
+│  剧集列表 / 播放器     │  ◀─ dramas / episodes ── │  媒体扫描  ┐                │
+│  互动浮层调度          │  ◀─ manifest ─────────── │  Manifest │── PostgreSQL  │
+│  互动上报 / 聚合展示    │  ── interactions ──────▶ │  互动聚合  ┘               │
 └──────────────────────┘  ◀─ aggregate ────────── └───────────┬───────────────┘
                                                               │ 视频 / 封面 (HTTP Range)
                                                               ▼
@@ -30,9 +30,9 @@
 | 层 | 选型 |
 |---|---|
 | 客户端 | Android (Java)、Media3 ExoPlayer、Retrofit + Gson、OkHttp、Glide |
-| 服务端 | Python 3.11、FastAPI、Uvicorn、SQLAlchemy 2.x、Pydantic v2 |
+| 服务端 | Python 、FastAPI、SQLAlchemy |
 | 持久化 | PostgreSQL 16（可降级到内存存储用于测试） |
-| 内容理解 | OpenAI 兼容大模型（默认火山方舟 Doubao-Seed），FFmpeg 抽音频，ASR + LLM 离线流水线 |
+| 内容理解 | FFmpeg 抽音频，ASR + LLM 离线流水线 |
 
 ## 3. 仓库结构
 
@@ -56,7 +56,7 @@
 | `drama` | `id` | 短剧元数据 |
 | `episode` | `id` / `content_id`(唯一) | 剧集元数据、视频地址、时长 |
 | `highlight_point` | `id` | 高光点时间窗、类型、互动 payload |
-| `interaction_event` | `id` | 每次互动点击的明细事件（含可空 `user_id`） |
+| `interaction_event` | `id` | 每次互动点击的明细事件（含预留、暂未使用的可空 `user_id`） |
 | `aggregate_snapshot` | `(highlight_id, action)` | 高光点各动作的聚合计数 |
 | `branch_session` | `id` | 剧情续写会话（预留） |
 
