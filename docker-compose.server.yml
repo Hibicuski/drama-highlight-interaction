@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: drama-highlight-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-drama_highlight}
+      POSTGRES_USER: ${POSTGRES_USER:-drama}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-drama} -d ${POSTGRES_DB:-drama_highlight}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./server
+    image: drama-highlight-api:latest
+    container_name: drama-highlight-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - path: ./server/.env.server
+        required: false
+    environment:
+      PORT: ${PORT:-3000}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-drama}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-drama_highlight}
+      LOCAL_DRAMA_ROOT: /media/drama
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      MANIFEST_ROOT: /data/manifests
+      MANIFEST_INDEX_PATH: /data/index.json
+    ports:
+      - "${PUBLIC_API_PORT:-3000}:3000"
+    volumes:
+      - ${DRAMA_HOST_PATH:-../drama}:/media/drama:ro
+      - server_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/ready', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  server_data:
