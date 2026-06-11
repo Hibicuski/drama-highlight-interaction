@@ -2,5 +2,10 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 openai==1.58.1
 httpx==0.28.1
+python-dotenv==1.2.2
 SQLAlchemy==2.0.36
 psycopg[binary]==3.2.13
+
+# ASR is done via the model API by default (no local model). To use local
+# offline whisper instead, install it separately: pip install openai-whisper torch
+# (on GPU hosts install the matching CUDA build of torch first).

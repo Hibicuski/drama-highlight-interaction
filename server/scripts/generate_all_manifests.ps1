@@ -5,12 +5,18 @@ param(
     [string]$DramaRoot,
     [string]$FfmpegBin,
     [string]$Summary = "",
+    [string]$AsrModel = "small",
+    [string]$AsrLanguage = "zh",
+    [string]$AsrDevice = "auto",
+    [ValidateSet("whisper", "remote")]
+    [string]$AsrMode = "remote",
+    [string]$AsrApiModel = "",
+    [string]$AsrBaseUrl = "",
+    [string]$AsrApiKey = "",
     [int]$Limit = 0,
     [switch]$UseOpenAIDefaultBaseUrl,
     [switch]$Force,
     [switch]$Retranscribe,
-    [switch]$Reenrich,
-    [switch]$SeparateSpeakers,
     [switch]$DryRun
 )
 
@@ -96,136 +102,12 @@ function Get-RelativeVideoPath {
     return $relativePath.Replace('\', '/')
 }
 
-function Test-ReusableEnrichedTranscript {
-    param([string]$Path)
-
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        return $false
-    }
-
-    try {
-        $json = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-        return $json._meta -and $json._meta.reusable -eq $true
-    }
-    catch {
-        return $false
-    }
-}
-
-function Get-JsonProperty {
-    param(
-        [object]$Object,
-        [string]$Name
-    )
-
-    if ($null -eq $Object) {
-        return $null
-    }
-
-    $property = $Object.PSObject.Properties[$Name]
-    if ($property) {
-        return $property.Value
-    }
-    return $null
-}
-
-function Get-EnrichedEpisodeContext {
-    param(
-        [string]$Path,
-        [int]$EpisodeIndex
-    )
-
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        return ""
-    }
-
-    try {
-        $json = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-        $meta = Get-JsonProperty -Object $json -Name "_meta"
-        $reusable = Get-JsonProperty -Object $meta -Name "reusable"
-        if ($reusable -ne $true) {
-            return ""
-        }
-
-        $speakerLabels = @()
-        $characters = Get-JsonProperty -Object $json -Name "characters"
-        if ($characters) {
-            foreach ($character in @($characters | Select-Object -First 6)) {
-                $id = [string](Get-JsonProperty -Object $character -Name "id")
-                $name = [string](Get-JsonProperty -Object $character -Name "name")
-                $id = $id.Trim()
-                $name = $name.Trim()
-                if ($id -and $name) {
-                    $speakerLabels += "$id=$name"
-                }
-                elseif ($id) {
-                    $speakerLabels += $id
-                }
-            }
-        }
-
-        if ($speakerLabels.Count -eq 0) {
-            $segments = Get-JsonProperty -Object $json -Name "segments"
-            foreach ($segment in @($segments | Select-Object -First 80)) {
-                $speaker = [string](Get-JsonProperty -Object $segment -Name "speaker")
-                $speakerName = [string](Get-JsonProperty -Object $segment -Name "speaker_name")
-                $speaker = $speaker.Trim()
-                $speakerName = $speakerName.Trim()
-                if ($speaker -and $speakerName) {
-                    $label = "$speaker=$speakerName"
-                }
-                else {
-                    $label = $speaker
-                }
-                if ($label -and -not ($speakerLabels -contains $label)) {
-                    $speakerLabels += $label
-                }
-                if ($speakerLabels.Count -ge 6) {
-                    break
-                }
-            }
-        }
-
-        if ($speakerLabels.Count -eq 0) {
-            return ""
-        }
-        return "episode ${EpisodeIndex} speakers: " + ($speakerLabels -join "; ")
-    }
-    catch {
-        return ""
-    }
-}
-
-function Add-SeriesContext {
-    param(
-        [string]$ExistingContext,
-        [string]$EpisodeContext,
-        [int]$MaxChars = 1600
-    )
-
-    if (-not $EpisodeContext) {
-        return $ExistingContext
-    }
-
-    $lines = @()
-    if ($ExistingContext) {
-        $lines += @($ExistingContext -split "\r?\n" | Where-Object { $_ })
-    }
-    $lines += $EpisodeContext
-
-    while (($lines -join [Environment]::NewLine).Length -gt $MaxChars -and $lines.Count -gt 1) {
-        $lines = @($lines | Select-Object -Skip 1)
-    }
-    return $lines -join [Environment]::NewLine
-}
-
 $serverRoot = Split-Path -Parent $PSScriptRoot
 $projectRoot = Split-Path -Parent $serverRoot
 $projectsRoot = Split-Path -Parent $projectRoot
 $python = Join-Path $serverRoot ".venv\Scripts\python.exe"
 $manifestRoot = Join-Path $serverRoot "data\manifests"
 $transcriptRoot = Join-Path $serverRoot "data\transcripts"
-$enrichedTranscriptRoot = Join-Path $serverRoot "data\enriched_transcripts"
 
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw "Python virtual environment not found at '$python'. Create server\.venv and install requirements first."
@@ -235,7 +117,6 @@ if (-not $DramaRoot) {
     $DramaRoot = Join-Path $projectsRoot "drama"
 }
 $DramaRoot = (Resolve-Path -LiteralPath $DramaRoot).Path
-
 $env:LOCAL_DRAMA_ROOT = $DramaRoot
 
 $videoExtensions = @(".mp4", ".mov", ".mkv", ".avi")
@@ -270,7 +151,6 @@ for ($dramaOffset = 0; $dramaOffset -lt $dramaDirectories.Count; $dramaOffset++)
             Video = $video.FullName
             Manifest = Join-Path $manifestRoot "$contentId.json"
             Transcript = Join-Path $transcriptRoot "$contentId.json"
-            EnrichedTranscript = Join-Path $enrichedTranscriptRoot "$contentId.json"
         }
     }
 }
@@ -289,7 +169,7 @@ Write-Host "Episodes selected: $($episodes.Count)"
 Write-Host ""
 
 if ($DryRun) {
-    $episodes | Select-Object Drama, EpisodeIndex, ContentId, RelativePath, Manifest, Transcript, EnrichedTranscript | Format-Table -AutoSize
+    $episodes | Select-Object Drama, EpisodeIndex, ContentId, RelativePath, Manifest, Transcript | Format-Table -AutoSize
     Write-Host "Dry run completed. No API calls were made."
     exit 0
 }
@@ -315,23 +195,51 @@ else {
 $env:MODEL_NAME = $ModelName
 $env:MODEL_AUDIO_NAME = $ModelName
 $env:MODEL_API_KEY = Read-ApiKey
-$env:ENRICHED_TRANSCRIPT_ROOT = $enrichedTranscriptRoot
 
-Remove-Item Env:ASR_BASE_URL -ErrorAction SilentlyContinue
-Remove-Item Env:ASR_API_KEY -ErrorAction SilentlyContinue
-Remove-Item Env:ASR_MODEL -ErrorAction SilentlyContinue
+if ($AsrMode -eq "whisper") {
+    # Optional local offline ASR. The default mode is "remote" (model API).
+    $env:ASR_ENGINE = "whisper"
+    $env:WHISPER_MODEL = $AsrModel
+    $env:ASR_LANGUAGE = $AsrLanguage
+    $env:ASR_DEVICE = $AsrDevice
+    Remove-Item Env:ASR_BASE_URL -ErrorAction SilentlyContinue
+    Remove-Item Env:ASR_API_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:ASR_MODEL -ErrorAction SilentlyContinue
+}
+else {
+    # Remote ASR via the model API. With no ASR_MODEL set, the pipeline uses the
+    # Responses audio-understanding path (MODEL_AUDIO_NAME). Pass -AsrApiModel to
+    # use a dedicated speech-to-text model instead. Endpoint/key default to the
+    # MODEL_* values above unless overridden with -AsrBaseUrl / -AsrApiKey.
+    Remove-Item Env:ASR_ENGINE -ErrorAction SilentlyContinue
+    Remove-Item Env:WHISPER_MODEL -ErrorAction SilentlyContinue
+    $env:ASR_LANGUAGE = $AsrLanguage
+    if ($AsrApiModel) { $env:ASR_MODEL = $AsrApiModel } else { Remove-Item Env:ASR_MODEL -ErrorAction SilentlyContinue }
+    if ($AsrBaseUrl) { $env:ASR_BASE_URL = $AsrBaseUrl } else { Remove-Item Env:ASR_BASE_URL -ErrorAction SilentlyContinue }
+    if ($AsrApiKey) { $env:ASR_API_KEY = $AsrApiKey } else { Remove-Item Env:ASR_API_KEY -ErrorAction SilentlyContinue }
+}
 
 Write-Host "FFmpeg: $ffmpeg"
 Write-Host "FFprobe: $ffprobe"
 $modelBaseUrlLabel = if ($UseOpenAIDefaultBaseUrl) { "<OpenAI default>" } elseif ($BaseUrl) { $BaseUrl } else { "<OpenAI default>" }
 Write-Host "Model base URL: $modelBaseUrlLabel"
 Write-Host "Model: $ModelName"
+if ($AsrMode -eq "whisper") {
+    Write-Host "ASR mode:   local whisper"
+    Write-Host "ASR model:  $AsrModel"
+    Write-Host "ASR device: $AsrDevice"
+}
+else {
+    $asrApiLabel = if ($AsrApiModel) { "remote STT model '$AsrApiModel'" } else { "remote model API (audio understanding via $ModelName)" }
+    $asrApiBase = if ($AsrBaseUrl) { $AsrBaseUrl } else { $modelBaseUrlLabel }
+    Write-Host "ASR mode:   $asrApiLabel"
+    Write-Host "ASR base:   $asrApiBase"
+}
 Write-Host ""
 
 $successCount = 0
 $skipCount = 0
 $failureCount = 0
-$seriesContextByDrama = @{}
 
 try {
     for ($index = 0; $index -lt $episodes.Count; $index++) {
@@ -340,18 +248,11 @@ try {
         Write-Host "[$number/$($episodes.Count)] Content $($episode.ContentId): $($episode.Video)"
 
         if (-not $Force -and (Test-Path -LiteralPath $episode.Manifest -PathType Leaf)) {
-            $episodeContext = if ($SeparateSpeakers) { Get-EnrichedEpisodeContext -Path $episode.EnrichedTranscript -EpisodeIndex $episode.EpisodeIndex } else { "" }
-            if ($episodeContext) {
-                $existingContext = if ($seriesContextByDrama.ContainsKey($episode.Drama)) { $seriesContextByDrama[$episode.Drama] } else { "" }
-                $seriesContextByDrama[$episode.Drama] = Add-SeriesContext -ExistingContext $existingContext -EpisodeContext $episodeContext
-                Write-Host "  Loaded speaker context from enriched transcript."
-            }
             Write-Host "  Skipped: manifest already exists. Use -Force to regenerate."
             $skipCount++
             continue
         }
 
-        $seriesContext = if ($seriesContextByDrama.ContainsKey($episode.Drama)) { $seriesContextByDrama[$episode.Drama] } else { "" }
         $arguments = @(
             "-m",
             "app.scripts.generate_episode_manifest",
@@ -362,33 +263,13 @@ try {
         if ($Summary) {
             $arguments += @("--summary", $Summary)
         }
-        if ($SeparateSpeakers -and $seriesContext) {
-            Write-Host "  Using previous speaker context for drama '$($episode.Drama)'."
-            $arguments += @("--series-context", $seriesContext)
-        }
         if (-not $Retranscribe -and (Test-Path -LiteralPath $episode.Transcript -PathType Leaf)) {
             Write-Host "  Reusing transcript: $($episode.Transcript)"
             $arguments += @("--transcript-json", $episode.Transcript)
         }
-        if ($SeparateSpeakers) {
-            $arguments += @("--separate-speakers")
-        }
-        if ($SeparateSpeakers -and -not $Retranscribe -and -not $Reenrich -and (Test-ReusableEnrichedTranscript -Path $episode.EnrichedTranscript)) {
-            Write-Host "  Reusing enriched transcript: $($episode.EnrichedTranscript)"
-            $arguments += @("--enriched-transcript-json", $episode.EnrichedTranscript)
-        }
-        elseif ($SeparateSpeakers -and -not $Retranscribe -and -not $Reenrich -and (Test-Path -LiteralPath $episode.EnrichedTranscript -PathType Leaf)) {
-            Write-Host "  Ignoring enriched transcript without reusable model metadata: $($episode.EnrichedTranscript)"
-        }
 
         & $python @arguments
         if ($LASTEXITCODE -eq 0) {
-            $episodeContext = if ($SeparateSpeakers) { Get-EnrichedEpisodeContext -Path $episode.EnrichedTranscript -EpisodeIndex $episode.EpisodeIndex } else { "" }
-            if ($episodeContext) {
-                $existingContext = if ($seriesContextByDrama.ContainsKey($episode.Drama)) { $seriesContextByDrama[$episode.Drama] } else { "" }
-                $seriesContextByDrama[$episode.Drama] = Add-SeriesContext -ExistingContext $existingContext -EpisodeContext $episodeContext
-                Write-Host "  Updated speaker context from enriched transcript."
-            }
             $successCount++
         }
         else {

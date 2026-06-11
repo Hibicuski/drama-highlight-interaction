@@ -9,6 +9,8 @@ from typing import Any
 import httpx
 from openai import BadRequestError
 
+from app.services.local_asr import LOCAL_ASR_ENGINES, LocalASRClient, normalize_engine
+
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 
@@ -17,6 +19,7 @@ class ModelClient:
         self.base_url = os.getenv("MODEL_BASE_URL", "")
         self.api_key = os.getenv("MODEL_API_KEY", "")
         self.model = os.getenv("MODEL_NAME", "")
+        self.timeout = float(os.getenv("MODEL_TIMEOUT", "120"))
 
     @property
     def is_configured(self) -> bool:
@@ -28,7 +31,7 @@ class ModelClient:
 
         from openai import OpenAI
 
-        client_options: dict[str, str] = {"api_key": self.api_key}
+        client_options: dict[str, Any] = {"api_key": self.api_key, "timeout": self.timeout}
         if self.base_url:
             client_options["base_url"] = self.base_url
         client = OpenAI(**client_options)
@@ -53,6 +56,7 @@ class ModelClient:
 
 class AudioTranscriptionClient:
     def __init__(self) -> None:
+        self.engine = normalize_engine(os.getenv("ASR_ENGINE", ""))
         self.base_url = os.getenv("ASR_BASE_URL", os.getenv("MODEL_BASE_URL", ""))
         self.api_key = os.getenv("ASR_API_KEY", os.getenv("MODEL_API_KEY", ""))
         self.transcription_model = os.getenv("ASR_MODEL", "")
@@ -60,11 +64,15 @@ class AudioTranscriptionClient:
 
     @property
     def is_configured(self) -> bool:
+        if self.engine in LOCAL_ASR_ENGINES:
+            return True
         return bool(self.api_key and (self.transcription_model or self.audio_understanding_model))
 
     def transcribe(self, audio_path: Path) -> dict[str, Any]:
         if not self.is_configured:
             raise RuntimeError("Audio transcription is not configured. Set MODEL_API_KEY and MODEL_NAME.")
+        if self.engine in LOCAL_ASR_ENGINES:
+            return LocalASRClient().transcribe(audio_path)
         if not self.transcription_model:
             return self.transcribe_with_responses_audio_understanding(audio_path)
 
@@ -91,11 +99,11 @@ class AudioTranscriptionClient:
 
     def transcribe_with_responses_audio_understanding(self, audio_path: Path) -> dict[str, Any]:
         audio_bytes = audio_path.read_bytes()
-        if len(audio_bytes) > 25 * 1024 * 1024:
+        audio_data = base64.b64encode(audio_bytes).decode("ascii")
+        if len(audio_data) > 25 * 1024 * 1024:
             raise RuntimeError("Extracted audio exceeds the 25 MB Base64 input limit")
 
         base_url = (self.base_url or DEFAULT_OPENAI_BASE_URL).rstrip("/")
-        audio_data = base64.b64encode(audio_bytes).decode("ascii")
         response = httpx.post(
             f"{base_url}/responses",
             headers={
@@ -160,5 +168,8 @@ def strip_markdown_fence(raw_text: str) -> str:
 
 
 def is_unsupported_json_mode_error(error: BadRequestError) -> bool:
-    message = str(error).lower()
-    return "response_format" in message and "json_object" in message and "not supported" in message
+    # We only ever send response_format={"type": "json_object"}, which is itself
+    # valid. So any BadRequestError mentioning response_format means the endpoint
+    # rejects JSON mode (OpenAI-compatible servers phrase this many ways), and we
+    # can safely retry without it.
+    return "response_format" in str(error).lower()
