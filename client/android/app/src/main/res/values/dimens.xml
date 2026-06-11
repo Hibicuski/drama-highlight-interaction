@@ -4,6 +4,7 @@
     <dimen name="spacing_xxs">1dp</dimen>
     <dimen name="spacing_xs">2dp</dimen>
     <dimen name="spacing_s">4dp</dimen>
+    <dimen name="highlight_marker_width">3dp</dimen>
     <dimen name="spacing_m">6dp</dimen>
     <dimen name="spacing_l">8dp</dimen>
     <dimen name="spacing_xl">10dp</dimen>

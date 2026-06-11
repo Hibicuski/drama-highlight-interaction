@@ -3,7 +3,9 @@ package com.warren.shortdrama.feature.episode_player;
 import android.os.Bundle;
 import android.widget.TextView;
 
+import androidx.annotation.OptIn;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.media3.common.util.UnstableApi;
 import androidx.media3.ui.PlayerView;
 
 import com.warren.shortdrama.R;
@@ -14,10 +16,13 @@ import com.warren.shortdrama.core.model.HighlightPoint;
 import com.warren.shortdrama.core.model.InteractionModels;
 import com.warren.shortdrama.core.player.DramaPlayer;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class EpisodePlayerActivity extends AppCompatActivity {
 
     private DramaPlayer dramaPlayer;
-    private TextView tvTitle;
+    private PlayerView playerView;
 
     private InteractionScheduler scheduler;
     private InteractionRepository interactionRepository;
@@ -34,8 +39,8 @@ public class EpisodePlayerActivity extends AppCompatActivity {
         interactionRepository = new InteractionRepository(this);
         overlayController = new InteractionOverlayController(findViewById(R.id.main));
 
-        PlayerView playerView = findViewById(R.id.player_view);
-        tvTitle = findViewById(R.id.tv_player_drama_title);
+        playerView = findViewById(R.id.player_view);
+        TextView tvTitle = findViewById(R.id.tv_player_drama_title);
 
         String dramaTitle = getIntent().getStringExtra(getString(R.string.extra_drama_title));
         String episodeTitle = getIntent().getStringExtra(getString(R.string.extra_episode_title));
@@ -64,6 +69,7 @@ public class EpisodePlayerActivity extends AppCompatActivity {
         interactionRepository.fetchManifest(contentId, new InteractionRepository.ManifestCallback() {
             @Override
             public void onSuccess(HighlightManifest manifest) {
+                showHighlightMarkers(manifest);
                 setupScheduler(manifest);
                 allowPlayback();
             }
@@ -73,6 +79,29 @@ public class EpisodePlayerActivity extends AppCompatActivity {
                 allowPlayback();
             }
         });
+    }
+
+    /**
+     * Renders each highlight ("高光时刻") as a marker on the player progress bar so the viewer
+     * can see — and seek to — the dramatic moments before reaching them.
+     */
+    @OptIn(markerClass = UnstableApi.class)
+    private void showHighlightMarkers(HighlightManifest manifest) {
+        if (playerView == null || manifest == null || manifest.getHighlights() == null) return;
+
+        List<Long> times = new ArrayList<>();
+        for (HighlightPoint hl : manifest.getHighlights()) {
+            if (hl == null || hl.getStartMs() < 0) continue;
+            times.add(hl.getStartMs());
+        }
+        if (times.isEmpty()) return;
+
+        long[] markerTimesMs = new long[times.size()];
+        boolean[] playedMarkers = new boolean[times.size()];
+        for (int i = 0; i < times.size(); i++) {
+            markerTimesMs[i] = times.get(i);
+        }
+        playerView.setExtraAdGroupMarkers(markerTimesMs, playedMarkers);
     }
 
     private void setupScheduler(HighlightManifest manifest) {

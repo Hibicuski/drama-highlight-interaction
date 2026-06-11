@@ -5,6 +5,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=3000 \
     WEB_CONCURRENCY=2
 
+# Use Tencent public mirrors so apt/pip downloads don't crawl from the default
+# Debian/PyPI sources (ffmpeg install otherwise stalled ~1h on the cloud host).
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i \
+            -e 's|http://deb.debian.org/debian|http://mirrors.tencent.com/debian|g' \
+            -e 's|http://security.debian.org/debian-security|http://mirrors.tencent.com/debian-security|g' \
+            -e 's|http://deb.debian.org/debian-security|http://mirrors.tencent.com/debian-security|g' \
+            /etc/apt/sources.list.d/debian.sources; \
+    fi
+
+ENV PIP_INDEX_URL=https://mirrors.tencent.com/pypi/simple
+ENV PIP_TRUSTED_HOST=mirrors.tencent.com
+
 WORKDIR /app
 
 RUN apt-get update \

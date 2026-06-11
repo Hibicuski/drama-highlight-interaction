@@ -10,6 +10,9 @@
         android:id="@+id/player_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        app:ad_marker_color="@color/highlight_marker"
+        app:ad_marker_width="@dimen/highlight_marker_width"
+        app:played_ad_marker_color="@color/highlight_marker_played"
         app:surface_type="surface_view"
         app:use_controller="true" />
 
