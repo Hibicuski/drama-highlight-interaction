@@ -167,7 +167,7 @@ def strip_markdown_fence(raw_text: str) -> str:
     return text
 
 
-def is_unsupported_json_mode_error(error: BadRequestError) -> bool:
+def is_unsupported_json_mode_error(error: Exception) -> bool:
     # We only ever send response_format={"type": "json_object"}, which is itself
     # valid. So any BadRequestError mentioning response_format means the endpoint
     # rejects JSON mode (OpenAI-compatible servers phrase this many ways), and we
