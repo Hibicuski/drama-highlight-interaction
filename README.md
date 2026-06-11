@@ -123,13 +123,16 @@ curl http://localhost:3000/ready      # {"ok": true}
 curl http://localhost:3000/api/dramas
 ```
 
-客户端将 `config_api_base_url` 指向 `http://服务器IP:3000/api/` 即可（见 [Android 客户端说明](client/android/README.md)）。对外暴露公网时，建议在前面再加一层反向代理与 HTTPS，并把 `PUBLIC_BASE_URL` 改为域名。
+客户端将 `config_api_base_url` 指向 `http://服务器IP:3000/api/` 即可（见 [Android 客户端说明](client/android/README.md)）。
 
 > 服务器上若需现场生成 Manifest（而非仅下发已有产物），仍按 [server/README.md](server/README.md) 在宿主机虚拟环境里跑离线流水线，再将产物 `cp` 进数据卷；生成脚本不随 API 镜像打包，保持运行镜像精简。
 
 ## 8. 文档索引
 
 - [服务端技术说明](server/README.md) — 架构、配置、Manifest 离线生成、API 参考
+
 - [Android 客户端技术说明](client/android/README.md) — 模块结构、播放与互动时序、网络层
+
 - [项目拆解与排期](docs/project-plan.md)
-- [飞书提交技术文档底稿](docs/feishu-submission.md) — 概述、架构、AI 使用说明、自评
+
+  
