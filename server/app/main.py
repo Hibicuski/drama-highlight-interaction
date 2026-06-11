@@ -37,6 +37,12 @@ def health() -> dict[str, bool]:
     return {"ok": True}
 
 
+@app.get("/ready")
+def ready() -> dict[str, bool]:
+    get_store()
+    return {"ok": True}
+
+
 @app.get("/videos/{relative_path:path}")
 def get_video(relative_path: str, request: Request) -> StreamingResponse:
     store = get_store()
