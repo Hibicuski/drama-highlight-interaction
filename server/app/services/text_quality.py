@@ -8,60 +8,37 @@ CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 LATIN_RE = re.compile(r"[A-Za-z]")
 
 MOJIBAKE_MARKERS = (
-    "鐖",
-    "绗",
-    "闆",
-    "鍙",
-    "浣",
-    "杩",
-    "鎴",
-    "瀹",
+    "閻",
+    "缁",
+    "闂",
+    "閸",
+    "娴",
+    "鏉",
+    "閹",
+    "鐎",
+    "閺",
+    "娑",
+    "鈧",
+    "锟",
     "鍝",
-    "鍟",
-    "鏄",
-    "涓",
-    "€",
-    "�",
+    "庡",
+    "揩",
+    "鐪",
+    "嬶",
+    "紝",
+    "浣犺",
+    "鐭",
+    "楂",
+    "璇",
+    "绂",
+    "閿",
+    "鎽",
 )
-
-EMOTION_TERMS = (
-    "爽",
-    "笑",
-    "鹅叫",
-    "打脸",
-    "反转",
-    "高能",
-    "甜",
-    "燃",
-    "破防",
-    "上头",
-    "离谱",
-    "心疼",
-    "扎心",
-    "紧张",
-    "惊",
-    "懵",
-    "名场面",
-    "解气",
-    "心动",
-    "好磕",
-    "稳了",
-    "气炸",
-    "泪目",
-    "站",
-    "冲",
-    "敢",
-    "信",
-    "猜",
-    "来",
-)
-
 
 BLOCKED_TITLE_TERMS = (
     "酸鸡",
     "贱",
     "垃圾",
-    "蠢",
     "傻",
     "废物",
     "狗血",
@@ -106,7 +83,10 @@ def is_usable_interaction_copy(text: str, *, max_chars: int) -> bool:
         return False
     if looks_like_mojibake(stripped) or has_private_or_replacement_char(stripped):
         return False
-    return any(term in stripped for term in EMOTION_TERMS)
+    # Label vocabulary is steered by the prompt (a recommended set) for display
+    # consistency, but validation only blocks low-quality terms — it does not
+    # require a fixed word, so normal Chinese emotion words are not dropped.
+    return not contains_blocked_title_term(stripped)
 
 
 def is_usable_title_copy(text: str, *, max_chars: int) -> bool:

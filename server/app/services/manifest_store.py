@@ -13,6 +13,7 @@ from app.services.text_quality import is_usable_interaction_copy, is_usable_titl
 
 ALLOWED_TEMPLATES = {"dual-button", "poll", "tap-boost"}
 ALLOWED_EFFECTS = {None, "particle-burst", "ratio-reveal", "pulse"}
+DEFAULT_EFFECT = "pulse"
 ALLOWED_ACTION_TONES = {None, "positive", "negative", "shocked", "funny", "confused", "support", "calm"}
 ALLOWED_ACTION_ICONS = {None, "heart", "fire", "shock", "laugh", "question", "check", "boost"}
 ALLOWED_HIGHLIGHT_TYPES = {
@@ -168,9 +169,11 @@ def normalize_manifest(
         if candidate.template not in ALLOWED_TEMPLATES:
             reject(f"{candidate.id}: component template is not allowlisted")
             continue
-        if candidate.payload.effect is None or candidate.payload.effect not in ALLOWED_EFFECTS:
-            reject(f"{candidate.id}: interaction effect is not allowlisted")
-            continue
+        # effect is purely cosmetic; coerce a missing/invalid value to the default
+        # instead of dropping the whole highlight over one bad enum.
+        effect = candidate.payload.effect
+        if effect is None or effect not in ALLOWED_EFFECTS:
+            effect = DEFAULT_EFFECT
         if not is_usable_title_copy(candidate.payload.title, max_chars=MAX_TITLE_CHARS):
             reject(f"{candidate.id}: title must be concise Chinese title copy")
             continue
@@ -194,7 +197,7 @@ def normalize_manifest(
                 payload=HighlightPayload(
                     title=candidate.payload.title.strip(),
                     actions=actions,
-                    effect=candidate.payload.effect,
+                    effect=effect,
                 ),
             )
         )
