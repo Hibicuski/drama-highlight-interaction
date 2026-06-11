@@ -4,6 +4,7 @@
     <dimen name="spacing_xxs">1dp</dimen>
     <dimen name="spacing_xs">2dp</dimen>
     <dimen name="spacing_s">4dp</dimen>
+    <dimen name="highlight_marker_width">3dp</dimen>
     <dimen name="spacing_m">6dp</dimen>
     <dimen name="spacing_l">8dp</dimen>
     <dimen name="spacing_xl">10dp</dimen>
@@ -37,6 +38,7 @@
     <dimen name="interaction_button_icon_size">20dp</dimen>
     <dimen name="interaction_button_icon_padding">8dp</dimen>
     <dimen name="interaction_overlay_translation_y">100dp</dimen>
+    <dimen name="player_title_max_width">260dp</dimen>
     <dimen name="icon_launcher_size">108dp</dimen>
     <dimen name="avatar_size">40dp</dimen>
 </resources>

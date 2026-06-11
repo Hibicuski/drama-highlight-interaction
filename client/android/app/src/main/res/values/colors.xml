@@ -48,4 +48,8 @@
     <color name="interaction_tone_calm">#4167B2</color>
     <color name="interaction_effect_particle_warm">#FFFFD166</color>
     <color name="interaction_effect_particle_cool">#FF8FD8FF</color>
+
+    <!-- Highlight ("高光时刻") markers drawn on the player progress bar. -->
+    <color name="highlight_marker">#FFFFC400</color>
+    <color name="highlight_marker_played">#80FFC400</color>
 </resources>

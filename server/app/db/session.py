@@ -33,10 +33,17 @@ class Store(Protocol):
 
 
 def runtime_paths() -> tuple[Path, str]:
-    project_root = Path(__file__).resolve().parents[4]
-    local_drama_root = Path(os.getenv("LOCAL_DRAMA_ROOT", project_root / "drama")).resolve()
-    port = os.getenv("PORT", "3000")
-    public_base_url = os.getenv("PUBLIC_BASE_URL", f"http://10.0.2.2:{port}")
+    env_drama_root = os.getenv("LOCAL_DRAMA_ROOT") or os.getenv("DRAMA_HOST_PATH")
+    env_public_base_url = os.getenv("PUBLIC_BASE_URL")
+
+    if env_drama_root:
+        local_drama_root = Path(env_drama_root).resolve()
+    else:
+        current = Path(__file__).resolve()
+        project_root = current.parents[2] if len(current.parents) > 2 else Path.cwd()
+        local_drama_root = project_root / "drama"
+
+    public_base_url = (env_public_base_url or "http://127.0.0.1:3000").rstrip("/")
     return local_drama_root, public_base_url
 
 

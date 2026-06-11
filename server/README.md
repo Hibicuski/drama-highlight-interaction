@@ -53,8 +53,10 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 3000
 ```
 
-- 健康检查：`http://localhost:3000/health`
+- 健康检查：`http://localhost:3000/health`（存活）、`http://localhost:3000/ready`（就绪，触发 Store 初始化）
 - Swagger 文档：`http://localhost:3000/docs`
+
+> 单机容器化部署（API + PostgreSQL 一套 Compose 栈，含本镜像 `Dockerfile`）见仓库根目录 README 的「轻量化部署」一节。
 
 ## 4. 配置
 

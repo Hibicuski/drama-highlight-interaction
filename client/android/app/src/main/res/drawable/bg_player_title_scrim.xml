@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translucent rounded scrim behind the in-player drama title so the white
+     text stays legible over any frame without boxing in the whole top bar. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/interaction_card_default" />
+    <corners android:radius="@dimen/corner_s" />
+</shape>
