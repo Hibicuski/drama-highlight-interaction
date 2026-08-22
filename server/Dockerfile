@@ -1,3 +1,12 @@
+# ---- Stage 1: build the admin UI (Vue3 + Vite) ----
+FROM node:20-alpine AS admin-ui
+WORKDIR /ui
+COPY client_admin/package.json ./
+RUN npm install --no-audit --no-fund --ignore-scripts
+COPY client_admin/ ./
+RUN npm run build
+
+# ---- Stage 2: API image (contains FFmpeg, runs non-root) ----
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -26,10 +35,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --shell /usr/sbin/nologin appuser
 
-COPY requirements.txt .
+COPY server/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+COPY server/app ./app
+# 管理端静态资源（Vite 构建产物，/admin 挂载）
+COPY --from=admin-ui /ui/dist ./admin_dist
 
 USER appuser
 EXPOSE 3000

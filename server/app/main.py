@@ -1,18 +1,39 @@
 from __future__ import annotations
 
 import mimetypes
+import os
 from base64 import b64decode
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 from app.api import ai, dramas, interactions, manifests
+from app.api.admin import router as admin_router
 from app.db.session import get_store
+from app.services.manifest_service import ManifestValidationError
 from app.services.media_scanner import DEFAULT_POSTER_FILE_NAME, POSTER_EXTENSIONS, VIDEO_EXTENSIONS
 
-app = FastAPI(title="Drama Highlight Interaction API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 后台生成 worker：DB 后端下随 API 进程启动（lazily 获取 store，Postgres 未就绪不影响启动）。
+    worker = None
+    if os.getenv("STORE_BACKEND", "").lower() != "memory" and os.getenv("ADMIN_WORKER_ENABLED", "1") != "0":
+        from app.worker import GenerationWorker
+
+        worker = GenerationWorker(get_store)
+        worker.start()
+    try:
+        yield
+    finally:
+        if worker is not None:
+            worker.stop()
+
+
+app = FastAPI(title="Drama Highlight Interaction API", lifespan=lifespan)
 
 DEFAULT_POSTER_PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mM8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
@@ -30,6 +51,36 @@ app.include_router(dramas.router)
 app.include_router(manifests.router)
 app.include_router(interactions.router)
 app.include_router(ai.router)
+app.include_router(admin_router)
+
+
+@app.exception_handler(ManifestValidationError)
+async def manifest_validation_handler(request: Request, exc: ManifestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": {"message": "Manifest validation failed", "reasons": exc.reasons}},
+    )
+
+
+# 管理端静态资源：/admin 挂载 Vue 构建产物（client_admin/dist 或容器内 admin_dist）。
+# 必须在 /admin/api 路由之后挂载，保证 API 优先匹配。dist 不存在时（未构建前端）跳过挂载。
+def _admin_dist_dir() -> Path | None:
+    server_root = Path(__file__).resolve().parents[1]
+    project_root = server_root.parent
+    for candidate in (
+        server_root / "admin_dist",          # 容器内构建产物
+        project_root / "client_admin" / "dist",  # 宿主机前端构建产物
+    ):
+        if (candidate / "index.html").exists():
+            return candidate
+    return None
+
+
+_admin_dist = _admin_dist_dir()
+if _admin_dist is not None:
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/admin", StaticFiles(directory=_admin_dist, html=True), name="admin-ui")
 
 
 @app.get("/health")

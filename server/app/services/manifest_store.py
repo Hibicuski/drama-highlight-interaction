@@ -263,3 +263,61 @@ def strip_markdown_fence(raw_text: str) -> str:
             lines = lines[:-1]
         text = "\n".join(lines).strip()
     return text
+
+
+def upsert_manifest_rows(session, manifest: HighlightManifest) -> list[str]:
+    """把一份 Manifest 物化到线上表 highlight_point（含失效高光的聚合/事件清理）。
+
+    AI 生成落盘、人工发布都经由这里写入线上表，保证单一物化入口。
+    返回被移除的旧高光 id 列表（供审计日志记录，V3 升级软删除时以此为基线）。
+
+    :param session: 已开启事务的 SQLAlchemy session（调用方负责 commit）。
+    :param manifest: 已经过 normalize_manifest 归一化的 Manifest。
+    """
+    from sqlalchemy import delete, select
+
+    from app.db.orm import AggregateSnapshotRow, HighlightPointRow, InteractionEventRow
+
+    highlight_ids = {highlight.id for highlight in manifest.highlights}
+    stale_highlight_ids = session.scalars(
+        select(HighlightPointRow.id).where(
+            HighlightPointRow.content_id == manifest.content_id,
+            HighlightPointRow.id.not_in(highlight_ids),
+        )
+    ).all()
+    if stale_highlight_ids:
+        session.execute(
+            delete(AggregateSnapshotRow).where(AggregateSnapshotRow.highlight_id.in_(stale_highlight_ids))
+        )
+        session.execute(
+            delete(InteractionEventRow).where(InteractionEventRow.highlight_id.in_(stale_highlight_ids))
+        )
+        session.execute(delete(HighlightPointRow).where(HighlightPointRow.id.in_(stale_highlight_ids)))
+
+    for highlight in manifest.highlights:
+        action_keys = {action.key for action in highlight.payload.actions}
+        session.execute(
+            delete(AggregateSnapshotRow).where(
+                AggregateSnapshotRow.highlight_id == highlight.id,
+                AggregateSnapshotRow.action.not_in(action_keys),
+            )
+        )
+        session.execute(
+            delete(InteractionEventRow).where(
+                InteractionEventRow.highlight_id == highlight.id,
+                InteractionEventRow.action.not_in(action_keys),
+            )
+        )
+        session.merge(
+            HighlightPointRow(
+                id=highlight.id,
+                content_id=manifest.content_id,
+                start_ms=highlight.start_ms,
+                end_ms=highlight.end_ms,
+                type=highlight.type,
+                intensity=highlight.intensity,
+                template=highlight.template,
+                payload=highlight.payload.model_dump(),
+            )
+        )
+    return list(stale_highlight_ids)

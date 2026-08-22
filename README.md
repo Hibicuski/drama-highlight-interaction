@@ -125,6 +125,8 @@ curl http://localhost:3000/api/dramas
 
 客户端将 `config_api_base_url` 指向 `http://服务器IP:3000/api/` 即可（见 [Android 客户端说明](client/android/README.md)）。
 
+> **管理后台**：`http://服务器IP:3000/admin/`（Vue3 + Element Plus，随 API 镜像打包）。设置 `ADMIN_TOKEN` 后即可登录使用，支持 Manifest 编辑器（AI 候选 → 人工审核 → 发布）、AI 生成任务与审计日志。开发/部署细节见 [管理端 API 设计](docs/admin-api-design.md)。
+
 > 服务器上若需现场生成 Manifest（而非仅下发已有产物），仍按 [server/README.md](server/README.md) 在宿主机虚拟环境里跑离线流水线，再将产物 `cp` 进数据卷；生成脚本不随 API 镜像打包，保持运行镜像精简。
 
 ## 8. 文档索引
@@ -134,5 +136,9 @@ curl http://localhost:3000/api/dramas
 - [Android 客户端技术说明](client/android/README.md) — 模块结构、播放与互动时序、网络层
 
 - [项目拆解与排期](docs/project-plan.md)
+
+- [数据库设计（内容生产层）](docs/db-design.md) — 管理后台数据模型、`manifest_version` / `generation_task` / 审计日志
+
+- [管理端 API 设计](docs/admin-api-design.md) — `/admin/api` 接口规范、Manifest 编辑器与 AI 生成工作台流程
 
   

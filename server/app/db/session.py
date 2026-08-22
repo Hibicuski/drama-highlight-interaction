@@ -118,6 +118,10 @@ class DatabaseStore:
         self.reload()
 
     def reload(self) -> None:
+        from sqlalchemy import select
+
+        from app.db.orm import ManifestVersionRow
+
         dramas, episodes, manifests = scan_local_dramas(
             self.local_drama_root,
             self.public_base_url,
@@ -127,7 +131,16 @@ class DatabaseStore:
                 session.merge(self._drama_row(drama))
             for episode in episodes:
                 session.merge(self._episode_row(episode))
+            # source of truth 规则：磁盘 Manifest 只是初始种子。
+            # content_id 已有 published 版本的，跳过磁盘覆盖，防止旧 JSON 冲掉人工审核后的线上内容。
+            published_content_ids = set(
+                session.scalars(
+                    select(ManifestVersionRow.content_id).where(ManifestVersionRow.status == "published")
+                ).all()
+            )
             for manifest in manifests.values():
+                if manifest.content_id in published_content_ids:
+                    continue
                 self._upsert_manifest(session, manifest)
 
     def list_dramas(self) -> list[Drama]:
@@ -270,41 +283,11 @@ class DatabaseStore:
                 connection.execute(text(statement))
 
     def _upsert_manifest(self, session, manifest: HighlightManifest) -> None:
-        from sqlalchemy import delete, select
+        # 物化逻辑与 ManifestService 共用单一入口（upsert_manifest_rows），
+        # 保证"磁盘种子"与"人工发布"写入线上表的语义完全一致。
+        from app.services.manifest_store import upsert_manifest_rows
 
-        from app.db.orm import AggregateSnapshotRow, HighlightPointRow, InteractionEventRow
-
-        highlight_ids = {highlight.id for highlight in manifest.highlights}
-        stale_highlight_ids = session.scalars(
-            select(HighlightPointRow.id).where(
-                HighlightPointRow.content_id == manifest.content_id,
-                HighlightPointRow.id.not_in(highlight_ids),
-            )
-        ).all()
-        if stale_highlight_ids:
-            session.execute(
-                delete(AggregateSnapshotRow).where(AggregateSnapshotRow.highlight_id.in_(stale_highlight_ids))
-            )
-            session.execute(
-                delete(InteractionEventRow).where(InteractionEventRow.highlight_id.in_(stale_highlight_ids))
-            )
-            session.execute(delete(HighlightPointRow).where(HighlightPointRow.id.in_(stale_highlight_ids)))
-
-        for highlight in manifest.highlights:
-            action_keys = {action.key for action in highlight.payload.actions}
-            session.execute(
-                delete(AggregateSnapshotRow).where(
-                    AggregateSnapshotRow.highlight_id == highlight.id,
-                    AggregateSnapshotRow.action.not_in(action_keys),
-                )
-            )
-            session.execute(
-                delete(InteractionEventRow).where(
-                    InteractionEventRow.highlight_id == highlight.id,
-                    InteractionEventRow.action.not_in(action_keys),
-                )
-            )
-            session.merge(self._highlight_row(manifest.content_id, highlight))
+        upsert_manifest_rows(session, manifest)
 
     @staticmethod
     def _drama_row(drama: Drama):
@@ -331,21 +314,6 @@ class DatabaseStore:
             video_url=episode.video_url,
             poster=episode.poster,
             duration_ms=episode.duration_ms,
-        )
-
-    @staticmethod
-    def _highlight_row(content_id: str, highlight: HighlightPoint):
-        from app.db.orm import HighlightPointRow
-
-        return HighlightPointRow(
-            id=highlight.id,
-            content_id=content_id,
-            start_ms=highlight.start_ms,
-            end_ms=highlight.end_ms,
-            type=highlight.type,
-            intensity=highlight.intensity,
-            template=highlight.template,
-            payload=highlight.payload.model_dump(),
         )
 
     @staticmethod

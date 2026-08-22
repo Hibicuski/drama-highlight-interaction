@@ -3,7 +3,8 @@ uvicorn[standard]==0.34.0
 openai==1.58.1
 httpx==0.28.1
 python-dotenv==1.2.2
-SQLAlchemy==2.0.36
+# 2.0.43+ required for Python 3.14 (older releases crash on Mapped[X | None] annotations)
+SQLAlchemy==2.0.43
 psycopg[binary]==3.2.13
 
 # ASR is done via the model API by default (no local model). To use local

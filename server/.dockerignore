@@ -9,3 +9,10 @@ __pycache__/
 data/
 tests/
 *.log
+node_modules/
+.npm-cache/
+client_admin/dist/
+client_admin/node_modules/
+android/
+docs/
+assets/

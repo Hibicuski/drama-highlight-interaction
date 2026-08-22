@@ -17,7 +17,8 @@ services:
 
   api:
     build:
-      context: ./server
+      context: ..
+      dockerfile: server/Dockerfile
     image: drama-highlight-api:latest
     container_name: drama-highlight-api
     restart: unless-stopped

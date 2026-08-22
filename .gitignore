@@ -2,6 +2,7 @@
 node_modules/
 .pnpm-store/
 .yarn/
+.npm-cache/
 .venv/
 __pycache__/
 *.py[cod]
@@ -26,6 +27,7 @@ local.properties
 logs/
 tmp/
 temp/
+.pip-tmp/
 
 # IDE and OS files
 .idea/
