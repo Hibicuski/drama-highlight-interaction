@@ -16,16 +16,19 @@ Authorization: Bearer <ADMIN_TOKEN>
 - 所有 `/admin/api/*` 路由统一挂 `require_admin` 依赖（FastAPI `Depends`）；V4 升级 RBAC 时只改这一个依赖的签名，路由零改动。
 
 ```python
-# app/api/admin/auth.py（示意）
+# app/api/admin/auth.py（与实现一致）
 def require_admin(authorization: str = Header(default="")) -> None:
     expected = os.getenv("ADMIN_TOKEN", "")
-    if not expected or not authorization.startswith("Bearer "):
+    if not expected:
+        raise HTTPException(503, detail="Admin API disabled: ADMIN_TOKEN is not configured on the server")
+    if not authorization.startswith("Bearer "):
         raise HTTPException(401, detail="Admin token required")
     if not secrets.compare_digest(authorization.removeprefix("Bearer ").strip(), expected):
         raise HTTPException(401, detail="Invalid admin token")
 ```
 
-可选：`X-Admin-Operator: <昵称>` 头用于审计日志记录操作者，缺省记 `admin`。
+- **503**：服务端未配置 `ADMIN_TOKEN` 时管理端整体不可用（路由已挂载但拒绝一切请求）。
+- 可选：`X-Admin-Operator: <昵称>` 头用于审计日志记录操作者，缺省记 `admin`（对应 `get_operator` 依赖）。
 
 ### 1.2 通用约定
 
@@ -56,6 +59,7 @@ AI 与人工绝不走两套校验。
 | `GET` | `/dramas` | 管理端剧集列表（含剧集数/已发布数/互动量） | V1 |
 | `GET` | `/episodes?drama_id=` | 剧集列表（含 manifest 状态、高光数、互动数） | V1 |
 | `GET` | `/episodes/{content_id}` | 剧集详情 + 版本列表摘要 | V1 |
+| `POST` | `/contents/{content_id}/versions` | 创建版本（payload 缺省复制当前 published，source 默认 manual） | V1 |
 | `GET` | `/contents/{content_id}/versions` | Manifest 版本列表（draft/reviewing/published/archived） | V1 |
 | `GET` | `/contents/{content_id}/versions/{version_id}` | 版本详情（完整 payload + 审计线索） | V1 |
 | `PUT` | `/contents/{content_id}/versions/{version_id}` | 更新版本 payload（校验+归一化） | V1 |
@@ -86,6 +90,7 @@ AI 与人工绝不走两套校验。
     "title": "都市赘婿",
     "poster": "http://127.0.0.1:3000/posters/...",
     "tags": ["local", "demo"],
+    "description": "赘婿逆袭，打脸名场面合集",
     "episode_count": 12,
     "published_count": 8,
     "total_interactions": 2345
@@ -130,10 +135,15 @@ AI 与人工绝不走两套校验。
   "episode": {
     "id": 1001001,
     "content_id": "2fe8f92ec371216d",
+    "drama_id": 1001,
     "episode_index": 1,
     "title": "第01集",
     "video_url": "http://127.0.0.1:3000/videos/...",
-    "duration_ms": 300000
+    "poster": "http://127.0.0.1:3000/posters/...",
+    "duration_ms": 300000,
+    "manifest_status": "published",
+    "highlight_count": 4,
+    "interaction_count": 892
   },
   "versions": [
     {
@@ -155,6 +165,31 @@ AI 与人工绝不走两套校验。
 ```
 
 ### 3.2 Manifest 编辑器（核心）
+
+#### `POST /admin/api/contents/{content_id}/versions`
+
+创建新草稿版本（编辑器"新建草稿"入口，201）。`payload` 缺省时自动复制当前 published 版本；该集尚无任何版本时创建空草稿（`highlights: []`）。只做**结构校验**（字段齐全/类型正确），业务规则校验在保存（PUT）与发布时才执行——因此可以创建"还没填完"的中间草稿。
+
+```json
+// Request（payload 可缺省；source 默认 manual）
+{
+  "payload": { "content_id": "2fe8f92ec371216d", "version": "0.2.0", "highlights": [] },
+  "source": "manual"
+}
+
+// 201 Created
+{
+  "id": 5,
+  "content_id": "2fe8f92ec371216d",
+  "status": "draft",
+  "source": "manual",
+  "highlight_count": 0,
+  "payload": { "content_id": "2fe8f92ec371216d", "version": "0.2.0", "highlights": [] },
+  "created_at": "...", "updated_at": "...", "published_at": null
+}
+
+// 404 剧集不存在 / 422 结构校验失败（带 reasons）
+```
 
 #### `GET /admin/api/contents/{content_id}/versions`
 
@@ -216,7 +251,7 @@ AI 与人工绝不走两套校验。
 
 #### `PUT /admin/api/contents/{content_id}/versions/{version_id}`
 
-更新版本。**只允许改 draft/reviewing 状态**；published 版本不可改（要改先建新版本）。服务端校验 + 归一化，返回归一化后的 payload。
+更新版本。**只允许改 draft/reviewing 状态**（其他状态 409）；published 版本不可改（要改先建新版本）。服务端全量校验 + 归一化（422 带逐条 `reasons`），返回归一化后的 payload。**若该版本 `source` 为 `ai`，人工编辑保存后自动标记为 `ai_edited`**——前端据此区分"纯 AI 产物"与"人工改过"，避免规则分裂的同时保留溯源。
 
 ```json
 // Request
@@ -306,12 +341,13 @@ AI 与人工绝不走两套校验。
       "content_id": "2fe8f92ec371216d",
       "episode_id": 1001001,
       "relative_path": "都市赘婿/第01集.mp4",
-      "status": "running",            // pending | running | succeeded | failed
+      "task_type": "manifest_generate",      // manifest_generate | continuation(预留)
+      "status": "running",                   // pending | running | succeeded | failed
       "retry_count": 0,
       "max_retry": 3,
       "error_message": null,
-      "created_version_id": null,     // 成功后自动创建的 draft 版本
-      "created_at": "...", "finished_at": null
+      "created_version_id": null,            // 成功后自动创建的 draft 版本
+      "created_at": "...", "updated_at": "...", "started_at": "...", "finished_at": null
     }
   ],
   "total": 1, "page": 1, "page_size": 20
@@ -320,7 +356,7 @@ AI 与人工绝不走两套校验。
 
 #### `GET /admin/api/generation/tasks/{task_id}`
 
-前端轮询用（建议 1-2s 间隔）。任务成功后响应带 `created_version_id`，前端直接跳转编辑器。
+前端轮询用（当前前端实现 3s 刷新一次，见第 6 节）。任务成功后响应带 `created_version_id`，前端直接跳转编辑器。
 
 ```json
 200 OK
@@ -335,11 +371,14 @@ AI 与人工绝不走两套校验。
 
 #### `POST /admin/api/generation/tasks/{task_id}/retry`
 
-仅 failed 可重试（`retry_count < max_retry` 时自动恢复，此接口用于人工触发重试）。
+**仅 failed 可重试**（其他状态返回 409）。人工重试是"重置"语义：`retry_count` 归零、清空 `error_message` 与 `finished_at`，任务回到 `pending` 重新排队。自动重试则由 worker 完成：执行失败时 `retry_count + 1`，未达 `max_retry` 自动回 `pending` 等下一个轮询周期，达到 `max_retry` 才置 `failed` 等待人工介入。
 
 ```json
 // 202 Accepted
-{ "task_id": 42, "status": "pending", "retry_count": 1 }
+{ "task_id": 42, "status": "pending", "content_id": "2fe8f92ec371216d" }
+
+// 409 状态冲突（非 failed）
+{ "detail": "Only failed tasks can be retried" }
 ```
 
 ### 3.4 审计与运维
@@ -356,8 +395,8 @@ AI 与人工绝不走两套校验。
       "operation": "publish",
       "target_type": "manifest_version",
       "target_id": "4",
-      "before_json": {"status": "reviewing"},
-      "after_json": {"status": "published", "published_at": "..."},
+      "before": {"status": "reviewing"},
+      "after": {"status": "published", "published_at": "..."},
       "created_at": "..."
     }
   ],
@@ -394,15 +433,19 @@ sequenceDiagram
     U->>A: POST /generation/tasks {content_id}
     A->>A: 创建 generation_task(pending)
     A-->>U: 202 {task_id}
-    loop 轮询(1-2s)
+    loop 轮询(3s)
         U->>A: GET /generation/tasks/{task_id}
         A-->>U: status: pending/running
     end
     W->>W: SELECT ... FOR UPDATE SKIP LOCKED (pending)
     W->>P: 执行 episode_manifest_pipeline
     P-->>W: HighlightManifest
-    W->>S: 校验 + 创建 manifest_version(draft, source=ai)
-    W->>W: task → succeeded (记录 created_version_id)
+    alt 执行失败
+        W->>W: retry_count+1；未达 max_retry → 回 pending（下轮重领），否则 failed
+    else 成功
+        W->>S: 校验 + 创建 manifest_version(draft, source=ai)
+        W->>W: task → succeeded (记录 created_version_id)
+    end
     U->>A: GET /contents/{content_id}/versions
     A-->>U: 新的 draft 版本
     U->>A: PUT /versions/{id} {payload, status=reviewing}

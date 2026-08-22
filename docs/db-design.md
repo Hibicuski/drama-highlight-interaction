@@ -86,6 +86,7 @@ erDiagram
         text content_id FK
         text relative_path "worker 定位视频"
         text video_path "绝对路径冗余"
+        text task_type "manifest_generate/continuation"
         text status "pending/running/succeeded/failed"
         int retry_count
         int max_retry
@@ -137,7 +138,7 @@ CREATE TABLE manifest_version (
     source       TEXT NOT NULL DEFAULT 'ai'
                  CONSTRAINT ck_manifest_version_source
                  CHECK (source IN ('ai', 'ai_edited', 'manual')),
-    payload      JSONB NOT NULL,            -- 完整 HighlightManifest（含 highlights[]）
+    payload      JSONB NOT NULL DEFAULT '{}'::jsonb,  -- 完整 HighlightManifest（含 highlights[]）
     created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     published_at TIMESTAMPTZ
@@ -155,13 +156,19 @@ CREATE INDEX ix_manifest_version_content
 
 **状态机**：
 
-```text
-AI生成 ──► draft ──► reviewing ──► published ──(被新版本顶替)──► archived
-             ▲           │
-             └───────────┘        （编辑中任意回退到 draft）
+```mermaid
+stateDiagram-v2
+    [*] --> draft: AI 生成 / 人工新建
+    draft --> reviewing: 提交审核 (PUT status=reviewing)
+    reviewing --> draft: 编辑中回退 (PUT status=draft)
+    reviewing --> published: 发布（物化 highlight_point）
+    draft --> published: 跳过审核直接发布
+    published --> archived: 被新版本顶替
+    archived --> published: 回滚 (rollback)
+    published --> [*]
 ```
 
-**发布语义**：把 `payload` 物化进 `highlight_point`（复用现有 `DatabaseStore._upsert_manifest` 的增删/聚合清理逻辑），当前 published 版本置为 `archived`，记录审计日志。客户端读路径 `/api/contents/{id}/manifest` 零改动。
+**发布语义**：把 `payload` 物化进 `highlight_point`（`manifest_store.upsert_manifest_rows` 的增删/聚合清理逻辑），当前 published 版本置为 `archived`，记录审计日志。同一版本重复 publish 幂等（直接返回当前状态，不产生重复数据）。客户端读路径 `/api/contents/{id}/manifest` 零改动。
 
 **回滚语义**：选择任意 archived/published 版本 → 直接重新发布该版本（当前 published → archived），或先拷贝为 draft 再走审核流。两种都记录审计日志。
 
@@ -173,7 +180,7 @@ CREATE TABLE generation_task (
     episode_id    INTEGER,                  -- 冗余，便于按剧集查询（运行时 ID，可漂移）
     content_id    TEXT NOT NULL REFERENCES episode(content_id),
     relative_path TEXT NOT NULL,            -- worker 定位视频文件的唯一可靠依据
-    video_path    TEXT NOT NULL,            -- 绝对路径冗余（快照当时的值）
+    video_path    TEXT NOT NULL DEFAULT '', -- 绝对路径冗余（快照当时的值）
     task_type     TEXT NOT NULL DEFAULT 'manifest_generate'
                   CONSTRAINT ck_generation_task_type
                   CHECK (task_type IN ('manifest_generate', 'continuation')),
@@ -200,16 +207,15 @@ CREATE INDEX ix_generation_task_content ON generation_task (content_id);
 
 **状态机**：
 
-```text
-              ┌────────────┐
-              ▼            │ retry_count < max_retry
-pending ──► running ──► failed
-              │            │
-              ▼            └─────────► failed(终态, 人工重试/放弃)
-           succeeded
-              │
-              ▼
-     创建 manifest_version(draft, source=ai)
+```mermaid
+stateDiagram-v2
+    [*] --> pending: 创建任务
+    pending --> running: worker 领取 (FOR UPDATE SKIP LOCKED)
+    running --> succeeded: pipeline 成功 → 创建 manifest_version(draft, source=ai)
+    running --> pending: 执行失败且 retry_count < max_retry（自动重试）
+    running --> failed: 执行失败且 retry_count >= max_retry
+    failed --> pending: 人工 retry（retry_count 归零）
+    succeeded --> [*]
 ```
 
 **孤儿回收（worker 启动时）**：把 `status='running' AND updated_at < now() - 过期阈值` 的任务重置回 `pending`。语义从"重启任务消失"变成"任务最多重复执行一次"，幂等性由发布 upsert 兜底。

@@ -16,7 +16,7 @@
 | 剧情拓展 | 剧尾续写卡或结局卡 | 轻量生成结果 |
 | 文档和演示 | 架构图、流程图、排期、AI 使用说明、录屏 | 飞书文档和展示视频 |
 
-## 里程碑
+## 里程碑（历史排期，实际范围见 [admin-api-design.md](admin-api-design.md) 的阶段表）
 
 | 阶段 | 时间 | 重点 |
 |---|---|---|
@@ -26,18 +26,19 @@
 | M4 | 6 月 7 日至 6 月 9 日 | 剧尾轻量续写、动效 polish、部署 |
 | M5 | 6 月 10 日至 6 月 11 日 | 录屏、文档完善、最终演示验证 |
 
-## 数据模型
+## 数据模型（对齐 `server/db/schema.sql`）
 
 | 表 | 字段 |
 |---|---|
-| `drama` | `id`, `title`, `poster`, `tags` |
-| `episode` | `id`, `content_id`, `drama_id`, `title`, `video_url`, `duration_ms` |
-| `highlight_point` | `id`, `content_id`, `start_ms`, `end_ms`, `type`, `intensity`, `payload` |
+| `drama` | `id`, `title`, `poster`, `tags`, `description` |
+| `episode` | `id`, `content_id`, `drama_id`, `episode_index`, `title`, `video_url`, `poster`, `duration_ms` |
+| `highlight_point` | `id`, `content_id`, `start_ms`, `end_ms`, `type`, `intensity`, `template`, `payload` |
 | `interaction_event` | `id`, `session_id`, `content_id`, `highlight_id`, `action`, `created_at`，`user_id`（预留，接入用户系统后使用） |
-| `aggregate_snapshot` | `content_id`, `highlight_id`, `counter`, `updated_at` |
+| `aggregate_snapshot` | `(highlight_id, action)` 复合主键, `content_id`, `counter`, `updated_at` |
 | `branch_session` | `id`, `session_id`, `content_id`, `prompt`, `result`, `status`，`user_id`（预留，接入用户系统后使用） |
 
 > `user_id` 为预留的可空字段，当前互动与续写均以 `session_id` 标识访客，接入用户系统后再回填。
+> 内容生产层三张表（`manifest_version` / `generation_task` / `admin_operation_log`）见 [db-design.md](db-design.md)。
 
 ## AI 辅助说明
 
